@@ -1,0 +1,227 @@
+<script>
+const CustomerDetails = ({ customer, onViewEstimates, onViewProjects, showMessage }) => {
+  const [currentView, setCurrentView] = React.useState('details');
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editData, setEditData] = React.useState(null);
+  
+  React.useEffect(() => {
+    if (customer) {
+      setEditData({
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+        city: customer.city,
+        state: customer.state,
+        zip: customer.zip,
+        status: customer.status
+      });
+    }
+  }, [customer]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await new Promise(resolve => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(err => resolve({ success: false, error: err.message }))
+          .updateCustomerDetails({
+            customerId: customer.customerId,
+            ...editData
+          });
+      });
+
+      if (response.success) {
+        showMessage('Customer details updated successfully', 'success');
+        setIsEditing(false);
+      } else {
+        showMessage(response.error || 'Failed to update customer details', 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to update customer details', 'error');
+    }
+  };
+
+  const Navigation = () => {
+    const tabs = [
+      { id: 'details', label: 'Details' },
+      { id: 'estimates', label: 'Estimates' },
+      { id: 'projects', label: 'Projects' }
+    ];
+
+    return React.createElement('div', { className: 'border-b border-gray-200 mb-6' },
+      React.createElement('nav', { className: 'flex -mb-px' },
+        tabs.map(tab =>
+          React.createElement('button', {
+            key: tab.id,
+            onClick: () => {
+              if (tab.id === 'estimates') {
+                onViewEstimates(customer);
+              } else if (tab.id === 'projects') {
+                onViewProjects(customer);
+              } else {
+                setCurrentView(tab.id);
+              }
+            },
+            className: `whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm ${
+              currentView === tab.id
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`
+          }, tab.label)
+        )
+      )
+    );
+  };
+
+  const renderDetailsView = () => {
+    if (isEditing) {
+      return React.createElement('div', { className: 'grid grid-cols-2 gap-4 p-4' },
+        // Edit form fields
+        React.createElement('div', { className: 'space-y-4' },
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Name'),
+            React.createElement('input', {
+              type: 'text',
+              value: editData.name,
+              onChange: e => setEditData(prev => ({ ...prev, name: e.target.value })),
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Email'),
+            React.createElement('input', {
+              type: 'email',
+              value: editData.email,
+              onChange: e => setEditData(prev => ({ ...prev, email: e.target.value })),
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Phone'),
+            React.createElement('input', {
+              type: 'tel',
+              value: editData.phone,
+              onChange: e => setEditData(prev => ({ ...prev, phone: e.target.value })),
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Address'),
+            React.createElement('input', {
+              type: 'text',
+              value: editData.address,
+              onChange: e => setEditData(prev => ({ ...prev, address: e.target.value })),
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          )
+        ),
+        // Second column
+        React.createElement('div', { className: 'space-y-4' },
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'City'),
+            React.createElement('input', {
+              type: 'text',
+              value: editData.city,
+              onChange: e => setEditData(prev => ({ ...prev, city: e.target.value })),
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'State'),
+            React.createElement('input', {
+              type: 'text',
+              value: editData.state,
+              onChange: e => setEditData(prev => ({ ...prev, state: e.target.value })),
+              maxLength: 2,
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'ZIP'),
+            React.createElement('input', {
+              type: 'text',
+              value: editData.zip,
+              onChange: e => setEditData(prev => ({ ...prev, zip: e.target.value })),
+              maxLength: 5,
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Status'),
+            React.createElement('select', {
+              value: editData.status,
+              onChange: e => setEditData(prev => ({ ...prev, status: e.target.value })),
+              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
+            },
+              React.createElement('option', { value: 'Active' }, 'Active'),
+              React.createElement('option', { value: 'Inactive' }, 'Inactive')
+            )
+          )
+        ),
+        // Action buttons
+        React.createElement('div', { className: 'col-span-2 flex justify-end space-x-4 mt-4' },
+          React.createElement('button', {
+            onClick: () => setIsEditing(false),
+            className: 'px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
+          }, 'Cancel'),
+          React.createElement('button', {
+            onClick: handleSave,
+            className: 'px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700'
+          }, 'Save Changes')
+        )
+      );
+    }
+
+    // View mode
+    return React.createElement('div', { className: 'px-4 py-5 sm:p-6' },
+      React.createElement('div', { className: 'flex justify-end mb-4' },
+        React.createElement('button', {
+          onClick: () => setIsEditing(true),
+          className: 'px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
+        }, 'Edit Customer')
+      ),
+      React.createElement('dl', { className: 'grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2' },
+        [
+          { label: 'Customer ID', value: customer.customerId },
+          { label: 'Name', value: customer.name },
+          { label: 'Email', value: customer.email },
+          { label: 'Phone', value: customer.phone },
+          { label: 'Address', value: customer.address },
+          { label: 'City', value: customer.city },
+          { label: 'State', value: customer.state },
+          { label: 'ZIP', value: customer.zip },
+          { label: 'Status', value: customer.status },
+          { label: 'Total Projects', value: customer.metrics?.totalProjects },
+          { label: 'Active Projects', value: customer.metrics?.activeProjects },
+          { label: 'Total Revenue', value: formatCurrency(customer.metrics?.totalRevenue) }
+        ].map(item => 
+          React.createElement('div', { key: item.label, className: 'sm:col-span-1' },
+            React.createElement('dt', { className: 'text-sm font-medium text-gray-500' },
+              item.label
+            ),
+            React.createElement('dd', { className: 'mt-1 text-sm text-gray-900' },
+              item.value || 'N/A'
+            )
+          )
+        )
+      )
+    );
+  };
+
+  return React.createElement('div', { className: 'bg-white shadow overflow-hidden sm:rounded-lg' },
+    React.createElement(Navigation),
+    renderDetailsView()
+  );
+};
+
+// Export to window
+window.CustomerDetails = CustomerDetails;
+</script>

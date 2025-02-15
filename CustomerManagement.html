@@ -1,0 +1,212 @@
+<script>
+// CustomerManagement.html
+
+const CustomerManagement = () => {
+  // State Management
+  const [customers, setCustomers] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [message, setMessage] = React.useState({ text: '', type: '' });
+  const [selectedCustomer, setSelectedCustomer] = React.useState(null);
+  const [viewMode, setViewMode] = React.useState('list');
+  const [activeTab, setActiveTab] = React.useState('overview');
+
+  const mountedRef = React.useRef(true);
+
+  // Initialize on mount
+  React.useEffect(() => {
+    mountedRef.current = true;
+    fetchCustomers();
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Fetch customer data
+  const fetchCustomers = async () => {
+    if (!mountedRef.current) return;
+    setLoading(true);
+    try {
+      const response = await new Promise(resolve => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(err => resolve({ success: false, error: err.message }))
+          .getCustomersForClient();
+      });
+
+      if (!mountedRef.current) return;
+
+      if (response.success) {
+        setCustomers(response.data);
+      } else {
+        showMessage(response.error || 'Failed to load customers', 'error');
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        showMessage('Failed to load customers', 'error');
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Message handling
+  const showMessage = (text, type) => {
+    if (!mountedRef.current) return;
+    setMessage({ text, type });
+    setTimeout(() => {
+      if (mountedRef.current) {
+        setMessage({ text: '', type: '' });
+      }
+    }, 5000);
+  };
+
+  // Navigation Tabs Component
+  const NavigationTabs = ({ customer }) => {
+    const tabs = [
+      { id: 'overview', label: 'Overview', icon: '📊' },
+      { id: 'contacts', label: 'Contacts', icon: '👥' },
+      { id: 'projects', label: 'Projects', icon: '🏗️' },
+      { id: 'estimates', label: 'Estimates', icon: '📄' },
+      { id: 'documents', label: 'Documents', icon: '📁' },
+      { id: 'communications', label: 'Communications', icon: '✉️' },
+      { id: 'financials', label: 'Financials', icon: '💰' }
+    ];
+
+    return React.createElement('div', { className: 'border-b border-gray-200 mb-6' },
+      React.createElement('nav', { className: 'flex -mb-px space-x-8' },
+        tabs.map(tab =>
+          React.createElement('button', {
+            key: tab.id,
+            onClick: () => setActiveTab(tab.id),
+            className: `whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === tab.id
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`
+          },
+            React.createElement('span', { className: 'mr-2' }, tab.icon),
+            tab.label
+          )
+        )
+      )
+    );
+  };
+
+  // Top Actions Bar Component
+  const TopActionsBar = () => {
+    return React.createElement('div', { className: 'bg-white px-4 py-5 border-b border-gray-200 sm:px-6' },
+      React.createElement('div', { className: 'flex flex-wrap items-center justify-between' },
+        React.createElement('h2', { className: 'text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate' },
+          'Customer Management'
+        ),
+        React.createElement('div', { className: 'mt-4 flex md:mt-0 md:ml-4' },
+          React.createElement('button', {
+            type: 'button',
+            onClick: () => setViewMode('list'),
+            className: `inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+              viewMode === 'list' ? 'bg-gray-100' : ''
+            }`
+          }, 'List View'),
+          React.createElement('button', {
+            type: 'button',
+            onClick: () => setViewMode('dashboard'),
+            className: `ml-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+              viewMode === 'dashboard' ? 'bg-gray-100' : ''
+            }`
+          }, 'Dashboard')
+        )
+      )
+    );
+  };
+
+  // Main Render
+  return React.createElement('div', { className: 'min-h-screen bg-gray-100' },
+    React.createElement('div', { className: 'py-6' },
+      React.createElement('div', { className: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8' },
+        React.createElement(TopActionsBar),
+        
+        // Messages
+        message.text && React.createElement('div', {
+          className: `mt-4 p-4 rounded-md ${
+            message.type === 'success' ? 'bg-green-50 text-green-800' :
+            message.type === 'error' ? 'bg-red-50 text-red-800' :
+            'bg-blue-50 text-blue-800'
+          }`
+        }, message.text),
+
+        // Main Content
+        React.createElement('div', { className: 'mt-6' },
+          loading ? React.createElement('div', { className: 'text-center py-12' },
+            React.createElement('p', { className: 'text-gray-500 text-lg' }, 'Loading...')
+          ) : viewMode === 'list' 
+            ? React.createElement(window.CustomerList, {
+                customers,
+                onSelectCustomer: customer => {
+                  setSelectedCustomer(customer);
+                  setViewMode('details');
+                  setActiveTab('overview');
+                },
+                onSearch: searchTerm => {
+                  // Implement search
+                },
+                showMessage
+              })
+            : viewMode === 'details' && selectedCustomer
+              ? React.createElement('div', { className: 'bg-white shadow overflow-hidden sm:rounded-lg' },
+                  React.createElement(NavigationTabs, { customer: selectedCustomer }),
+                  React.createElement('div', { className: 'px-4 py-5 sm:p-6' },
+                    activeTab === 'overview'
+                      ? React.createElement(window.CustomerDetails, {
+                          customer: selectedCustomer,
+                          onBack: () => setViewMode('list'),
+                          showMessage
+                        })
+                      : activeTab === 'contacts'
+                        ? React.createElement(window.CustomerContacts, {
+                            customer: selectedCustomer,
+                            showMessage
+                          })
+                        : activeTab === 'projects'
+                          ? React.createElement(window.CustomerProjects, {
+                              customer: selectedCustomer,
+                              showMessage
+                            })
+                          : activeTab === 'estimates'
+                            ? React.createElement(window.CustomerEstimates, {
+                                customer: selectedCustomer,
+                                showMessage
+                              })
+                            : activeTab === 'documents'
+                              ? React.createElement(window.CustomerDocuments, {
+                                  customer: selectedCustomer,
+                                  showMessage
+                                })
+                              : activeTab === 'communications'
+                                ? React.createElement(window.CustomerCommunications, {
+                                    customer: selectedCustomer,
+                                    showMessage
+                                  })
+                                : React.createElement(window.CustomerFinancials, {
+                                    customer: selectedCustomer,
+                                    showMessage
+                                  })
+                  )
+                )
+              : React.createElement(window.CustomerDashboard, {
+                  customers,
+                  onSelectCustomer: customer => {
+                    setSelectedCustomer(customer);
+                    setViewMode('details');
+                    setActiveTab('overview');
+                  },
+                  showMessage
+                })
+        )
+      )
+    )
+  );
+};
+
+// Export to window
+window.CustomerManagement = CustomerManagement;
+</script>

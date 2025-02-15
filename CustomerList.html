@@ -1,0 +1,188 @@
+<script>
+const CustomerList = ({
+  customers,
+  onSelectCustomer,
+  onSendEstimate,
+  onViewEstimates,
+  onFilterChange,
+  onSearch
+}) => {
+  // Local state for filters
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('All');
+  const [valueRangeFilter, setValueRangeFilter] = React.useState({
+    min: null,
+    max: null
+  });
+
+  // Handle filter changes
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    onSearch(value);
+  };
+
+  const handleStatusChange = (e) => {
+    const value = e.target.value;
+    setStatusFilter(value);
+    onFilterChange({ status: value, valueRange: valueRangeFilter });
+  };
+
+  const handleValueRangeChange = (min, max) => {
+    setValueRangeFilter({ min, max });
+    onFilterChange({ status: statusFilter, valueRange: { min, max } });
+  };
+
+  // Export functionality
+  const exportCustomerData = () => {
+    const exportData = customers.map(customer => ({
+      'Customer ID': customer.customerId,
+      'Name': customer.name,
+      'Email': customer.email,
+      'Phone': customer.phone,
+      'Total Projects': customer.metrics.totalProjects,
+      'Active Projects': customer.metrics.activeProjects,
+      'Total Revenue': customer.metrics.totalRevenue,
+      'Average Project Value': customer.metrics.averageProjectValue,
+      'Last Activity': customer.metrics.lastActivityDate
+    }));
+
+    // Convert to CSV
+    const headers = Object.keys(exportData[0]);
+    const csvContent = [
+      headers.join(','),
+      ...exportData.map(row => 
+        headers.map(header => 
+          JSON.stringify(row[header] || '')
+        ).join(',')
+      )
+    ].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `customer_data_${new Date().toISOString()}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  return React.createElement('div', { className: 'space-y-4' },
+    // Controls
+    React.createElement('div', { className: 'flex justify-between items-center' },
+      React.createElement('div', { className: 'flex space-x-4' },
+        // Search Input
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'Search customers...',
+          value: searchTerm,
+          onChange: handleSearchChange,
+          className: 'p-2 border rounded'
+        }),
+        // Status Filter
+        React.createElement('select', {
+          value: statusFilter,
+          onChange: handleStatusChange,
+          className: 'p-2 border rounded'
+        },
+          React.createElement('option', { value: 'All' }, 'All Statuses'),
+          React.createElement('option', { value: 'Active' }, 'Active'),
+          React.createElement('option', { value: 'Inactive' }, 'Inactive')
+        ),
+        // Value Range Filter
+        React.createElement('div', { className: 'flex items-center space-x-2' },
+          React.createElement('input', {
+            type: 'number',
+            placeholder: 'Min Value',
+            value: valueRangeFilter.min || '',
+            onChange: e => handleValueRangeChange(e.target.value, valueRangeFilter.max),
+            className: 'p-2 border rounded w-24'
+          }),
+          React.createElement('span', null, '-'),
+          React.createElement('input', {
+            type: 'number',
+            placeholder: 'Max Value',
+            value: valueRangeFilter.max || '',
+            onChange: e => handleValueRangeChange(valueRangeFilter.min, e.target.value),
+            className: 'p-2 border rounded w-24'
+          })
+        )
+      ),
+      // Action Buttons
+      React.createElement('div', { className: 'flex space-x-2' },
+        React.createElement('button', {
+          onClick: exportCustomerData,
+          className: 'p-2 bg-green-600 text-white rounded hover:bg-green-700'
+        }, 'Export CSV')
+      )
+    ),
+
+    // Customer Table
+    React.createElement('table', { className: 'min-w-full divide-y divide-gray-200' },
+      React.createElement('thead', { className: 'bg-gray-50' },
+        React.createElement('tr', null,
+          ['Customer ID', 'Name', 'Email', 'Phone', 'Projects', 'Total Value', 'Status', 'Actions']
+            .map(header => 
+              React.createElement('th', {
+                key: header,
+                className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+              }, header)
+            )
+        )
+      ),
+      React.createElement('tbody', { className: 'bg-white divide-y divide-gray-200' },
+        customers.map(customer => 
+          React.createElement('tr', { key: customer.customerId },
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.customerId),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.name),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.email || 'N/A'),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.phone || 'N/A'),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, 
+              customer.metrics?.totalProjects || 0
+            ),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+              new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+              }).format(customer.metrics?.totalRevenue || 0)
+            ),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+              React.createElement('span', {
+                className: `px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  customer.status === 'Active' 
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`
+              }, customer.status)
+            ),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
+              React.createElement('div', { className: 'flex space-x-4' },
+                React.createElement('button', {
+                  onClick: () => onSelectCustomer(customer),
+                  className: 'text-indigo-600 hover:text-indigo-900'
+                }, 'View'),
+                React.createElement('button', {
+                  onClick: () => onViewEstimates(customer),
+                  className: 'text-blue-600 hover:text-blue-900'
+                }, 'Estimates'),
+                React.createElement('button', {
+                  onClick: () => onSendEstimate(customer.customerId),
+                  className: 'text-green-600 hover:text-green-900'
+                }, 'Send Estimate')
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+};
+
+// Export to window
+window.CustomerList = CustomerList;
+</script>
