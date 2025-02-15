@@ -1,0 +1,44 @@
+Project Data Analysis & Data Lake Migration Guide
+📌 Overview
+This project automates the extraction of schema information and status changes from Google Sheets for data lake migration and workflow tracking.
+
+💡 Features:
+✅ Extracts database schema (column names, data types, sample data).
+✅ Tracks and logs status changes across different data sheets.
+✅ Formats data for easy integration into a data lake.
+✅ Outputs data in Google Sheets and logs results for easy copy/paste.
+📂 Extracted Schema Report
+The following table summarizes the data structure extracted from the project:
+
+Sheet Name	Column Name	Example Data	Format	Data Type
+Projects	ProjectID	PROJ-202502-001	normal	String
+Projects	CustomerID	2025-001	normal	String
+Projects	ProjectName	new flooring	normal	String
+Projects	Status	APPROVED	normal	String
+Projects	CreatedOn	Sat Feb 01 2025 20:18:47 GMT-0500	normal	Date
+Projects	CreatedBy	matt@austinkunzconstruction.com	normal	String
+TimeLogs	TimeLogID	TL1738467498206	normal	String
+TimeLogs	ProjectID	PROJ-202502-002	normal	String
+TimeLogs	TotalHours	3	normal	Number
+MaterialsReceipts	VendorName	Home Depot	normal	String
+MaterialsReceipts	Amount	500	normal	Number
+Subinvoices	InvoiceAmount	5000	normal	Number
+Subinvoices	InvoiceDocURL	https://drive.google.com/file/...	normal	String
+Estimates	EstimateID	EST-PROJ-202502-005-1	normal	String
+Estimates	EstimatedAmount	500	normal	Number
+Customers	CustomerName	St. Test Hospital	normal	String
+Customers	Status	Active	normal	String
+ActivityLog	Action	ESTIMATE_DOCUMENT_GENERATED	normal	String
+ActivityLog	ReferenceID	EST-1738457703305	normal	String
+🔹 This extracted schema is useful for setting up database tables in a data lake!
+
+📊 Status Change Logs
+The following table logs status transitions for key records:
+
+Sheet Name	Record ID	Old Status	New Status	Timestamp	User
+Projects	PROJ-202502-001	N/A	APPROVED	2025-02-01 20:18:47	matt@austinkunzconstruction.com
+Projects	PROJ-202502-002	N/A	APPROVED	2025-02-01 20:24:11	matt@austinkunzconstruction.com
+Projects	PROJ-202502-003	N/A	APPROVED	2025-02-01 22:35:29	matt@austinkunzconstruction.com
+Estimates	EST-PROJ-202502-001-7	N/A	DRAFT	2025-02-15 16:06:11	Unknown
+Customers	2025-001	N/A	Active	2025-02-15 16:06:16	Unknown
+🔹 These logs can be stored in a time-series database or analytics system to track workflow changes.
