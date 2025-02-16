@@ -160,6 +160,86 @@ const EstimateEmailDialog = ({
   );
 };
 
+const EstimateActions = ({ onSubmit, disabled, loading }) => {
+  const [showActions, setShowActions] = React.useState(false);
+
+  const actions = [
+    { 
+      id: 'DRAFT', 
+      label: 'Save as Draft',
+      description: 'Save estimate but don\'t send to customer yet',
+      icon: '📝'
+    },
+    { 
+      id: 'PENDING', 
+      label: 'Save & Submit for Review',
+      description: 'Save and mark ready for internal review',
+      icon: '👀'
+    },
+    {
+      id: 'PENDING_CUSTOMER',
+      label: 'Save & Send to Customer',
+      description: 'Save and prepare to email to customer',
+      icon: '📧'
+    }
+  ];
+
+  const handleActionClick = (action) => {
+    setShowActions(false);
+    onSubmit(action.id);
+  };
+
+  return React.createElement('div', null,
+    !showActions ? 
+      React.createElement('button', {
+        onClick: () => setShowActions(true),
+        disabled: disabled || loading,
+        className: `px-6 py-3 rounded font-medium text-white
+          ${disabled || loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`
+      }, loading ? 'Processing...' : 'Generate Estimate')
+    :
+      React.createElement('div', {
+        className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+      },
+        React.createElement('div', {
+          className: 'bg-white rounded-lg max-w-md w-full p-6'
+        },
+          React.createElement('h3', {
+            className: 'text-lg font-medium mb-4'
+          }, 'Choose Action'),
+          React.createElement('div', {
+            className: 'space-y-3'
+          },
+            actions.map(action => 
+              React.createElement('button', {
+                key: action.id,
+                onClick: () => handleActionClick(action),
+                className: 'w-full p-4 text-left border rounded hover:bg-gray-50 flex items-center space-x-3'
+              },
+                React.createElement('span', {
+                  className: 'text-2xl'
+                }, action.icon),
+                React.createElement('div', null,
+                  React.createElement('div', {
+                    className: 'font-medium'
+                  }, action.label),
+                  React.createElement('div', {
+                    className: 'text-sm text-gray-500'
+                  }, action.description)
+                )
+              )
+            ),
+            React.createElement('button', {
+              onClick: () => setShowActions(false),
+              className: 'w-full p-3 border rounded hover:bg-gray-50 mt-4'
+            }, 'Cancel')
+          )
+        )
+      )
+  );
+};
+
+
 const EstimateCreator = () => {
   // Log component load
   console.log("EstimateCreator component instantiated.");
@@ -390,13 +470,34 @@ const EstimateCreator = () => {
     }
   };
 
-  // Modified handleSubmit function to support email sending
-  const handleSubmit = async (e, sendEmail = false) => {
-    if(e && e.preventDefault) e.preventDefault();
-    if (!mountedRef.current) return;
+  const logEstimate = async (estimateData, action) => {
+    try {
+      const logResponse = await new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .logEstimateActivity({
+            estimateId: estimateData.estimateId,
+            action: action,
+            status: estimateData.status,
+            details: `Estimate ${action.toLowerCase()} with status: ${estimateData.status}`
+          });
+      });
 
+      if (!logResponse.success) {
+        console.error('Failed to log estimate activity:', logResponse.error);
+      }
+    } catch (error) {
+      console.error('Error logging estimate activity:', error);
+      // Don't throw the error - we don't want to interrupt the main flow
+    }
+  };
+
+  // Modified handleSubmit function to support email sending
+  const handleSubmit = async (status = 'DRAFT') => {
+    if (!mountedRef.current) return;
     setLoading(true);
-    showMessage(sendEmail ? "Generating estimate for email..." : "Processing estimate, please wait...", "info");
+    showMessage("Processing estimate, please wait...", "info");
 
     try {
       // Step 1: Handle Customer Creation/Selection
@@ -503,7 +604,7 @@ const EstimateCreator = () => {
         amount: formatAsCurrency(parseFloat(item.amount))
       }));
 
-      // Step 4: Create estimate
+      // Step 4: Create estimate with status
       const estimateData = {
         customerId: customerInfo.customerId,
         projectId: projectResponse.data.projectId,
@@ -521,7 +622,7 @@ const EstimateCreator = () => {
         scopeOfWork: projectData.scopeOfWork,
         tableItems: formattedTableItems,
         totalAmount: projectData.totalAmount,
-        estimatedAmount: projectData.estimatedAmount
+        status: status // Add status to estimate data
       };
 
       console.log('Creating estimate with data:', estimateData);
@@ -536,22 +637,31 @@ const EstimateCreator = () => {
         throw new Error(estimateResponse?.error || 'Failed to create estimate');
       }
 
-      if (sendEmail) {
-        // For Generate & Email flow, set current estimate and show email dialog
-        setCurrentEstimate({
-          estimateId: estimateResponse.data?.estimateId,
-          docId: estimateResponse.data?.docUrl || '',
-          customerName: customerInfo.name,
-          projectName: projectData.name,
-          totalAmount: projectData.totalAmount
-        });
-        setShowEmailDialog(true);
-        showMessage('✅ Estimate created successfully! Please send the estimate via email.', 'success');
-      } else {
-        // Success handling for normal flow
-        showMessage('✅ Estimate created successfully!', 'success');
-        setDocumentGenerated(true);
+      // Create new estimate object for state management
+      const newEstimate = {
+        estimateId: estimateResponse.data?.estimateId,
+        docId: estimateResponse.data?.docUrl || '',
+        customerName: customerInfo.name,
+        projectName: projectData.name,
+        totalAmount: projectData.totalAmount,
+        status: status
+      };
 
+      // Show success message based on status
+      const messages = {
+        'DRAFT': 'Estimate saved as draft',
+        'PENDING': 'Estimate submitted for review',
+        'PENDING_CUSTOMER': 'Estimate ready to send to customer'
+      };
+
+
+      showMessage(`✅ ${messages[status]}!`, 'success');
+
+      // Handle different status flows
+      if (status === 'PENDING_CUSTOMER') {
+        setCurrentEstimate(newEstimate);
+        setShowEmailDialog(true);
+      } else {
         if (estimateResponse.data?.docUrl) {
           setPreviewUrl(estimateResponse.data.docUrl);
           window.open(estimateResponse.data.docUrl, '_blank');
@@ -561,6 +671,7 @@ const EstimateCreator = () => {
           setEstimateId(estimateResponse.data.estimateId);
         }
 
+        // Reset form after delay for non-email statuses
         setTimeout(() => {
           if (mountedRef.current) resetForm();
         }, 2000);
@@ -577,6 +688,7 @@ const EstimateCreator = () => {
       }
     }
   };
+
 
   // Wrapper for Generate & Email action
   const handleGenerateAndSend = async (e) => {
@@ -902,22 +1014,17 @@ const EstimateCreator = () => {
       React.createElement('div', { className: 'text-lg font-medium' },
         `Total Amount: ${formatAsCurrency(projectData.totalAmount)}`
       ),
-      // Navigation buttons (including both flows)
-      React.createElement('div', { className: 'flex space-x-4 pt-6' },
+      // Navigation buttons with EstimateActions
+      React.createElement('div', { className: 'flex justify-between pt-6' },
         React.createElement('button', {
           onClick: () => setStep('CUSTOMER_DETAILS'),
-          className: 'flex-1 p-3 border rounded hover:bg-gray-50'
+          className: 'px-6 py-3 border rounded hover:bg-gray-50'
         }, 'Back'),
-        React.createElement('button', {
-          onClick: handleSubmit,
-          disabled: loading || !validateProjectData(),
-          className: `flex-1 p-3 rounded text-white ${loading || !validateProjectData() ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`
-        }, loading ? 'Generating...' : 'Generate Estimate'),
-        React.createElement('button', {
-          onClick: handleGenerateAndSend,
-          disabled: loading || !validateProjectData(),
-          className: `flex-1 p-3 rounded text-white ${loading || !validateProjectData() ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`
-        }, loading ? 'Generating...' : 'Generate & Email Estimate')
+        React.createElement(EstimateActions, {
+          onSubmit: handleSubmit,
+          disabled: !validateProjectData(),
+          loading: loading
+        })
       )
     );
   };

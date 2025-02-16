@@ -682,58 +682,64 @@ function updateProjectStatus(projectId, newStatus, userEmail) {
 // ESTIMATE FUNCTIONS
 // ==========================================
 
-function createAndSaveEstimate(data) {
-  const context = 'createAndSaveEstimate';
-  try {
-    Logger.log(`=== ${context} called ===`);
-    Logger.log(`Data received: ${JSON.stringify(data)}`);
+// In Database.gs
+function logEstimate(data) {
+  Logger.log('=== logEstimate called ===');
+  Logger.log('Data received: ' + JSON.stringify(data));
 
-    // Verify we have the estimates folder ID
-    if (!data.projectFolderId) {
-      Logger.log('WARNING: No estimates folder ID provided');
-      if (data.folders && data.folders.estimates) {
-        data.projectFolderId = data.folders.estimates;
-        Logger.log(`Using estimates folder from folders object: ${data.projectFolderId}`);
-      }
-    }
-
-    // 1) Log the estimate to the DB
-    Logger.log('Logging estimate...');
-    const logResult = logEstimate({
-      ...data,
-      estimatedAmount: data.totalAmount
-    });
-    Logger.log(`logResult: ${JSON.stringify(logResult)}`);
-
-    const finalEstimateId = logResult.estimateId;
-
-    // 2) Generate the document
-    Logger.log('Generating estimate document...');
-    const docResult = generateEstimateDocument({
-      ...data,
-      estimateId: finalEstimateId,
-      projectFolderId: data.projectFolderId
-    });
-    Logger.log(`docResult: ${JSON.stringify(docResult)}`);
-
-    if (!docResult.success) {
-      throw new Error(docResult.error || 'Failed to generate estimate document');
-    }
-
-    return {
-      success: true,
-      data: {
-        estimateId: finalEstimateId,
-        docUrl: docResult.data.docUrl,
-        docId: docResult.data.docId
-      }
-    };
-
-  } catch (error) {
-    Logger.log(`Error in ${context}: ${error.message}`);
-    Logger.log(`Stack: ${error.stack}`);
-    return { success: false, error: error.message };
+  const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
+  if (!sheet) {
+    Logger.log('Estimates sheet not found');
+    throw new Error("Estimates sheet not found");
   }
+
+  let finalEstimateId = data.estimateId;
+  if (!finalEstimateId) {
+    if (!data.projectId) {
+      Logger.log('Cannot generate EstimateID without a ProjectID');
+      throw new Error("Cannot generate EstimateID without a ProjectID");
+    }
+    finalEstimateId = generateEstimateID(data.projectId);
+    Logger.log('Generated new estimate ID: ' + finalEstimateId);
+  }
+
+  const now = new Date();
+  const userEmail = Session.getActiveUser().getEmail();
+  
+  // Use provided status or default to DRAFT
+  const status = data.status || 'DRAFT';
+  
+  // Prepare row data with explicit status
+  const rowData = [
+    finalEstimateId,               // EstimateID
+    data.projectId || '',          // ProjectID
+    now,                           // DateCreated
+    data.customerId || '',         // CustomerID
+    data.estimatedAmount || 0,     // EstimatedAmount
+    data.contingencyAmount || 0,   // ContingencyAmount
+    JSON.stringify(data.tableItems || []), // ScopeItemsJSON
+    userEmail,                     // CreatedBy
+    '',                            // DocUrl placeholder
+    '',                            // DocId placeholder
+    status,                        // Status - use passed in status
+    '',                            // SentDate
+    'true',                        // IsActive
+    '',                            // PreviousVersionId
+    '1',                           // VersionNumber
+    '',                            // ApprovedDate
+    '',                            // ApprovedBy
+    data.estimatedAmount || 0,     // UpdatedAmount
+    '',                            // ActiveEstimateId
+    data.estimatedAmount || 0      // CurrentApprovedAmount
+  ];
+
+  sheet.appendRow(rowData);
+
+  return {
+    estimateId: finalEstimateId,
+    createdOn: now,
+    status: status
+  };
 }
 
 // ==========================================
