@@ -743,7 +743,7 @@ function logEstimate(data) {
 }
 
 // ==========================================
-// NEW: UPDATE DOC URL HELPERS FOR MATERIALS & SUBINVOICES
+// NEW: UPDATE DOC URL HELPERS FOR MATERIALS,SUBINVOICES & ESTIMATES
 // ==========================================
 
 function updateMaterialsReceiptDocUrl(receiptId, docUrl, docId) {
@@ -785,6 +785,36 @@ function updateSubInvoiceDocUrl(invoiceId, docUrl, docId) {
   }
 }
 
+function updateEstimateDocUrl(estimateId, docUrl, docId) {
+  const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
+  if (!sheet) throw new Error("Estimates sheet not found");
+  
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  const estimateIdCol = headers.indexOf('EstimateID');
+  const docUrlCol = headers.indexOf('DocUrl');
+  const docIdCol = headers.indexOf('DocId');
+  
+  if (estimateIdCol === -1 || docUrlCol === -1 || docIdCol === -1) {
+    throw new Error("Required columns not found in Estimates sheet");
+  }
+  
+  // Find the row with matching estimateId
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][estimateIdCol] === estimateId) {
+      // Update DocUrl
+      sheet.getRange(i + 1, docUrlCol + 1).setValue(docUrl);
+      // Update DocId
+      sheet.getRange(i + 1, docIdCol + 1).setValue(docId);
+      
+      Logger.log(`Updated estimate ${estimateId} with DocUrl: ${docUrl} and DocId: ${docId}`);
+      return true;
+    }
+  }
+  
+  throw new Error(`Estimate ID ${estimateId} not found in sheet`);
+}
 // ==========================================
 // FUNCTIONS FOR CUSTOMER MANGEMENT MODULE
 // ==========================================

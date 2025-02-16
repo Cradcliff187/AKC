@@ -28,12 +28,13 @@ const validateCustomerResponse = (data) => {
   
   return true;
 };
-const EstimateEmailDialog = ({ 
+
+const EstimateEmailDialog = ({
   isOpen, 
   onClose, 
   estimate, 
   onSend, 
-  defaultEmail = '' 
+  defaultEmail = ''
 }) => {
   const [recipientEmail, setRecipientEmail] = React.useState(defaultEmail);
   const [subject, setSubject] = React.useState('');
@@ -50,6 +51,7 @@ const EstimateEmailDialog = ({
     }
   }, [isOpen, defaultEmail, estimate]);
 
+  // UPDATED handleSubmit TO HANDLE NULL RESPONSE AS SUCCESS
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -67,12 +69,15 @@ const EstimateEmailDialog = ({
         amount: estimate.totalAmount
       });
 
-      if (response.success) {
+      // Handle null response as success
+      if (response === null || response.success) {
         onClose();
-      } else {
-        throw new Error(response.error || 'Failed to send email');
+        return;
       }
+      
+      throw new Error(response.error || 'Failed to send email');
     } catch (err) {
+      console.error('Email submit error:', err);
       setError(err.message || 'Failed to send email');
     } finally {
       setSending(false);
@@ -238,7 +243,6 @@ const EstimateActions = ({ onSubmit, disabled, loading }) => {
       )
   );
 };
-
 
 const EstimateCreator = () => {
   // Log component load
@@ -448,24 +452,42 @@ const EstimateCreator = () => {
     return true;
   };
 
-  // Email handling function
+  // UPDATED handleSendEmail TO EXPLICITLY HANDLE NULL RESULT AND RESET FORM
   const handleSendEmail = async (emailData) => {
     try {
+      console.log('Sending email with data:', emailData);
+
       const response = await new Promise(resolve => {
         google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(err => resolve({ success: false, error: err.message }))
+          .withSuccessHandler(result => {
+            console.log('Email send response:', result);
+            // Handle null result explicitly
+            if (result === null) {
+              resolve({ success: true }); // Assume success if we get null
+            } else {
+              resolve(result);
+            }
+          })
+          .withFailureHandler(err => {
+            console.error('Email send error:', err);
+            resolve({ success: false, error: err.message || 'Failed to send email' });
+          })
           .sendEstimateEmail(emailData);
       });
 
       if (response.success) {
         showMessage('Estimate sent successfully!', 'success');
+        // Reset form after successful send
+        setTimeout(() => {
+          if (mountedRef.current) resetForm();
+        }, 2000);
         return response;
       } else {
         throw new Error(response.error || 'Failed to send estimate');
       }
     } catch (error) {
-      showMessage(error.message, 'error');
+      console.error('Error sending email:', error);
+      showMessage(error.message || 'Failed to send email', 'error');
       throw error;
     }
   };
@@ -592,6 +614,9 @@ const EstimateCreator = () => {
           });
       });
 
+      // Log the project creation response
+      console.log('Project creation response:', projectResponse);
+
       if (!projectResponse || !projectResponse.success) {
         throw new Error(projectResponse?.error || 'Failed to create project');
       }
@@ -622,10 +647,20 @@ const EstimateCreator = () => {
         scopeOfWork: projectData.scopeOfWork,
         tableItems: formattedTableItems,
         totalAmount: projectData.totalAmount,
-        status: status // Add status to estimate data
+        status: status,
+        generateDoc: true // <--- Added here
       };
 
-      console.log('Creating estimate with data:', estimateData);
+      // Log additional details
+      console.log('Project folders:', projectResponse.data.folders);
+      console.log('Full estimate payload:', estimateData);
+
+      // Log the final estimate data right before creation
+      console.log('Creating estimate with data:', {
+        ...estimateData,
+        projectFolderId: projectResponse.data.folders.estimates
+      });
+
       const estimateResponse = await new Promise((resolve, reject) => {
         google.script.run
           .withSuccessHandler(resolve)
@@ -638,22 +673,25 @@ const EstimateCreator = () => {
       }
 
       // Create new estimate object for state management
+      console.log('Estimate Response:', estimateResponse);
+      console.log('Document ID from response:', estimateResponse.data?.docId);      
       const newEstimate = {
         estimateId: estimateResponse.data?.estimateId,
-        docId: estimateResponse.data?.docUrl || '',
+        docId: estimateResponse.data?.docId,
         customerName: customerInfo.name,
         projectName: projectData.name,
         totalAmount: projectData.totalAmount,
         status: status
       };
 
+      console.log('Created newEstimate object:', newEstimate);
+      
       // Show success message based on status
       const messages = {
         'DRAFT': 'Estimate saved as draft',
         'PENDING': 'Estimate submitted for review',
         'PENDING_CUSTOMER': 'Estimate ready to send to customer'
       };
-
 
       showMessage(`✅ ${messages[status]}!`, 'success');
 
@@ -688,7 +726,6 @@ const EstimateCreator = () => {
       }
     }
   };
-
 
   // Wrapper for Generate & Email action
   const handleGenerateAndSend = async (e) => {
@@ -1048,7 +1085,6 @@ const EstimateCreator = () => {
             : renderProjectDetailsStep()
       )
     ),
-    // Add Email Dialog to your render
     React.createElement(EstimateEmailDialog, {
       isOpen: showEmailDialog,
       onClose: () => setShowEmailDialog(false),
@@ -1061,3 +1097,5 @@ const EstimateCreator = () => {
 
 window.EstimateCreator = EstimateCreator;
 </script>
+
+
