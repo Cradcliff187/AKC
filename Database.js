@@ -682,82 +682,57 @@ function updateProjectStatus(projectId, newStatus, userEmail) {
 // ESTIMATE FUNCTIONS
 // ==========================================
 
-function logEstimate(data) {
-  Logger.log('=== logEstimate called ===');
-  Logger.log('Data received: ' + JSON.stringify(data));
+function createAndSaveEstimate(data) {
+  const context = 'createAndSaveEstimate';
+  try {
+    Logger.log(`=== ${context} called ===`);
+    Logger.log(`Data received: ${JSON.stringify(data)}`);
 
-  const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
-  if (!sheet) {
-    Logger.log('Estimates sheet not found');
-    throw new Error("Estimates sheet not found");
-  }
-
-  let finalEstimateId = data.estimateId;
-  if (!finalEstimateId) {
-    if (!data.projectId) {
-      Logger.log('Cannot generate EstimateID without a ProjectID');
-      throw new Error("Cannot generate EstimateID without a ProjectID");
+    // Verify we have the estimates folder ID
+    if (!data.projectFolderId) {
+      Logger.log('WARNING: No estimates folder ID provided');
+      if (data.folders && data.folders.estimates) {
+        data.projectFolderId = data.folders.estimates;
+        Logger.log(`Using estimates folder from folders object: ${data.projectFolderId}`);
+      }
     }
-    finalEstimateId = generateEstimateID(data.projectId);
-    Logger.log('Generated new estimate ID: ' + finalEstimateId);
-  }
 
-  const now = new Date();
-  const userEmail = Session.getActiveUser().getEmail();
-  const initialStatus = 'DRAFT';  // Set explicit initial status
+    // 1) Log the estimate to the DB
+    Logger.log('Logging estimate...');
+    const logResult = logEstimate({
+      ...data,
+      estimatedAmount: data.totalAmount
+    });
+    Logger.log(`logResult: ${JSON.stringify(logResult)}`);
 
-  // Prepare row data with explicit status
-  const rowData = [
-    finalEstimateId,               // EstimateID
-    data.projectId || '',          // ProjectID
-    now,                           // DateCreated
-    data.customerId || '',         // CustomerID
-    data.estimatedAmount || 0,     // EstimatedAmount
-    data.contingencyAmount || 0,   // ContingencyAmount
-    JSON.stringify(data.scopeItems || []), // ScopeItemsJSON
-    userEmail,                     // CreatedBy
-    '',                            // DocUrl placeholder
-    '',                            // DocId placeholder
-    initialStatus,                 // Status - explicitly set
-    '',                            // SentDate
-    'true',                        // IsActive
-    '',                            // PreviousVersionId
-    '1',                           // VersionNumber
-    '',                            // ApprovedDate
-    '',                            // ApprovedBy
-    '',                            // UpdatedAmount
-    '',                            // ActiveEstimateId
-    ''                             // CurrentApprovedAmount
-  ];
+    const finalEstimateId = logResult.estimateId;
 
-  Logger.log('Appending row data to ESTIMATES sheet:', rowData);
+    // 2) Generate the document
+    Logger.log('Generating estimate document...');
+    const docResult = generateEstimateDocument({
+      ...data,
+      estimateId: finalEstimateId,
+      projectFolderId: data.projectFolderId
+    });
+    Logger.log(`docResult: ${JSON.stringify(docResult)}`);
 
-  sheet.appendRow(rowData);
-
-  Logger.log('Successfully appended row. Returning logEstimate result.');
-  return {
-    estimateId: finalEstimateId,
-    createdOn: now,
-    status: initialStatus
-  };
-}
-
-
-function updateEstimateDocUrl(estimateId, docUrl, docId) {
-  const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
-  if (!sheet) throw new Error("Estimates sheet not found");
-
-  const data = sheet.getDataRange().getValues();
-  // Find row where EstimateID == estimateId (column 0, ignoring header)
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const rowEstimateId = row[0];
-    if (rowEstimateId === estimateId) {
-      // columns 8 and 9 (1-based => 9 and 10) for docUrl/docId
-      sheet.getRange(i + 1, 9).setValue(docUrl);
-      sheet.getRange(i + 1, 10).setValue(docId);
-      break;
+    if (!docResult.success) {
+      throw new Error(docResult.error || 'Failed to generate estimate document');
     }
+
+    return {
+      success: true,
+      data: {
+        estimateId: finalEstimateId,
+        docUrl: docResult.data.docUrl,
+        docId: docResult.data.docId
+      }
+    };
+
+  } catch (error) {
+    Logger.log(`Error in ${context}: ${error.message}`);
+    Logger.log(`Stack: ${error.stack}`);
+    return { success: false, error: error.message };
   }
 }
 

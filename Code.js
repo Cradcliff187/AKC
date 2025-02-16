@@ -768,57 +768,195 @@ function generateEstimateDocument(data) {
 function createAndSaveEstimate(data) {
   const context = 'createAndSaveEstimate';
   try {
-    Logger.log(`=== ${context} called ===`);
-    Logger.log(`Data received: ${JSON.stringify(data)}`);
+    Logger.log('=== Starting createAndSaveEstimate ===');
+    Logger.log('Input data:', JSON.stringify(data));
 
-    // 1) Log the estimate to the DB (Database.gs)
-    Logger.log('Logging estimate...');
-    const logResult = logEstimate({
-      ...data,
-      estimatedAmount: data.totalAmount
-    });
-    Logger.log(`logResult: ${JSON.stringify(logResult)}`);
-
-    const finalEstimateId = logResult.estimateId;
-
-    // 2) Generate the document
-    Logger.log('Generating estimate document...');
-    const docResult = generateEstimateDocument({
-      ...data,
-      estimateId: finalEstimateId,
-      projectFolderId: data.projectFolderId || (data.folders && data.folders.estimates)
-    });
-    Logger.log(`docResult: ${JSON.stringify(docResult)}`);
-
-    if (!docResult.success) {
-      throw new Error(docResult.error || 'Failed to generate estimate document');
+    // 1. Validate required fields
+    const requiredFields = ['customerName', 'projectName', 'scopeOfWork', 'tableItems', 'totalAmount'];
+    const validation = validateRequiredFields(data, requiredFields);
+    if (!validation.valid) {
+      return createStandardResponse(false, null, validation.error);
     }
 
-    // 3) Update doc URL & ID
-    Logger.log(`Updating estimate doc URL for ID: ${finalEstimateId}`);
-    const docUrl = docResult.data.docUrl;
-    const docId = docResult.data.docId;
-    updateEstimateDocUrl(finalEstimateId, docUrl, docId);
-    Logger.log(`Estimate doc URL/ID updated successfully: ${docUrl} / ${docId}`);
-
-    // Return success
-    return {
-      success: true,
-      data: {
-        estimateId: finalEstimateId,
-        docUrl: docUrl,
-        docId: docId
+    // 2. Create project record if this is a new estimate
+    let projectId = data.projectId;
+    if (!projectId) {
+      const projectResult = createProjectRecord({
+        customerId: data.customerId,
+        projectName: data.projectName,
+        status: 'PENDING'
+      });
+      
+      if (!projectResult.success) {
+        throw new Error('Failed to create project: ' + projectResult.error);
       }
-    };
+      projectId = projectResult.data.projectId;
+    }
+
+    // 3. Generate estimate ID
+    const estimateId = generateEstimateID(projectId);
+
+    // 4. Create initial record in ESTIMATES sheet
+    const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
+    if (!sheet) throw new Error('Could not access Estimates sheet');
+
+    const now = new Date();
+    const userEmail = Session.getActiveUser().getEmail();
+
+    const rowData = [
+      estimateId,                    // EstimateID
+      projectId,                     // ProjectID
+      now,                          // DateCreated
+      data.customerId,              // CustomerID
+      data.totalAmount,             // EstimatedAmount
+      data.contingencyAmount || 0,   // ContingencyAmount
+      JSON.stringify(data.tableItems), // ScopeItemsJSON
+      userEmail,                    // CreatedBy
+      '',                           // DocUrl (placeholder)
+      '',                           // DocId (placeholder)
+      data.status || 'DRAFT',       // Status
+      '',                           // SentDate
+      'true',                       // IsActive
+      data.previousVersionId || '', // PreviousVersionId
+      '1',                          // VersionNumber
+      '',                           // ApprovedDate
+      '',                           // ApprovedBy
+      data.totalAmount,             // UpdatedAmount
+      '',                           // ActiveEstimateId
+      data.totalAmount              // CurrentApprovedAmount
+    ];
+
+    sheet.appendRow(rowData);
+
+    // 5. Generate document if requested
+    let docInfo = null;
+    if (data.generateDoc) {
+      docInfo = generateEstimateDocument({
+        estimateId,
+        projectId,
+        customerName: data.customerName,
+        customerAddress: data.customerAddress,
+        customerCity: data.customerCity,
+        customerState: data.customerState,
+        customerZip: data.customerZip,
+        scopeOfWork: data.scopeOfWork,
+        tableItems: data.tableItems,
+        projectFolderId: data.projectFolderId
+      });
+
+      if (docInfo.success && docInfo.data.docUrl) {
+        // Update doc URL and ID
+        updateEstimateDocUrl(estimateId, docInfo.data.docUrl, docInfo.data.docId);
+      }
+    }
+
+    // 6. Log activity
+    logSystemActivity(
+      'ESTIMATE_CREATED',
+      'ESTIMATE',
+      estimateId,
+      {
+        projectId,
+        customerId: data.customerId,
+        status: data.status || 'DRAFT',
+        amount: data.totalAmount,
+        generateDoc: data.generateDoc
+      }
+    );
+
+    // 7. Return success with estimate info
+    return createStandardResponse(true, {
+      estimateId,
+      projectId,
+      status: data.status || 'DRAFT',
+      docUrl: docInfo?.data?.docUrl || null,
+      docId: docInfo?.data?.docId || null
+    });
 
   } catch (error) {
-    // Enhanced error logging
     Logger.log(`Error in ${context}: ${error.message}`);
     Logger.log(`Stack: ${error.stack}`);
-    return { success: false, error: error.message };
+    return handleError(error, context);
   }
 }
 
+
+function sendEstimateEmail(data) {
+  const context = 'sendEstimateEmail';
+  try {
+    Logger.log('=== Starting sendEstimateEmail ===');
+    Logger.log('Data received:', JSON.stringify(data));
+
+    // Validate required fields
+    const requiredFields = ['estimateId', 'recipientEmail', 'docId'];
+    const validation = validateRequiredFields(data, requiredFields);
+    if (!validation.valid) {
+      return createStandardResponse(false, null, validation.error);
+    }
+
+    // Get the document and create PDF
+    const file = DriveApp.getFileById(data.docId);
+    const pdf = file.getAs(MimeType.PDF);
+    
+    // Get the estimate details for the email content
+    const { headers, rows } = getSheetData(CONFIG.SHEETS.ESTIMATES);
+    const estimateRow = rows.find(row => row[headers.indexOf('EstimateID')] === data.estimateId);
+    
+    if (!estimateRow) {
+      throw new Error('Estimate not found');
+    }
+
+    // Build email content
+    const subject = data.subject || `Estimate ${data.estimateId} from AKC LLC`;
+    const emailBody = `Dear ${data.customerName},
+
+Please find attached your estimate (${data.estimateId}) for ${data.projectName}.
+
+Total Amount: ${formatCurrency(data.amount)}
+
+${data.notes ? '\nAdditional Notes:\n' + data.notes + '\n' : ''}
+
+If you have any questions, please don't hesitate to contact us.
+
+Best regards,
+AKC LLC`;
+
+    // Send email with PDF attachment
+    GmailApp.sendEmail(
+      data.recipientEmail,
+      subject,
+      emailBody,
+      {
+        attachments: [pdf],
+        name: 'AKC LLC',
+        replyTo: Session.getActiveUser().getEmail()
+      }
+    );
+
+    // Log activity
+    logSystemActivity(
+      'ESTIMATE_EMAILED',
+      'ESTIMATE',
+      data.estimateId,
+      {
+        recipientEmail: data.recipientEmail,
+        sentBy: Session.getActiveUser().getEmail(),
+        timestamp: new Date()
+      }
+    );
+
+    return createStandardResponse(true, {
+      sent: true,
+      timestamp: new Date(),
+      recipient: data.recipientEmail
+    });
+
+  } catch (error) {
+    Logger.log(`Error in ${context}: ${error.message}`);
+    Logger.log(`Stack: ${error.stack}`);
+    return handleError(error, context);
+  }
+}
 
 // ==========================================
 // UTILITY
