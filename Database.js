@@ -606,6 +606,77 @@ function logEstimate(data) {
   };
 }
 
+function updateEstimateWithAmount(data) {
+  const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
+  const projectSheet = getSheet(CONFIG.SHEETS.PROJECTS);
+  const headers = sheet.getDataRange().getValues()[0];
+  
+  const estimateIdCol = headers.indexOf('EstimateID');
+  const amountCol = headers.indexOf('EstimatedAmount');
+  const statusCol = headers.indexOf('Status');
+  const projectIdCol = headers.indexOf('ProjectID');
+  const isActiveCol = headers.indexOf('IsActive');
+  const versionCol = headers.indexOf('VersionNumber');
+  
+  // Find the current estimate
+  const rowIndex = data.estimateId 
+    ? findRowIndex(sheet, estimateIdCol, data.estimateId)
+    : -1;
+
+  if (rowIndex === -1) {
+    throw new Error('Estimate not found');
+  }
+
+  const currentRow = sheet.getRange(rowIndex + 1, 1, 1, headers.length).getValues()[0];
+  const oldAmount = currentRow[amountCol];
+  const oldStatus = currentRow[statusCol];
+  const projectId = currentRow[projectIdCol];
+
+  // Handle version control
+  if (VERSION_REQUIRED_STATUSES.includes(oldStatus)) {
+    // Create new version
+    return createNewEstimateVersion({
+      ...data,
+      projectId,
+      previousVersion: {
+        amount: oldAmount,
+        status: oldStatus
+      }
+    });
+  } else {
+    // Update existing version
+    sheet.getRange(rowIndex + 1, amountCol + 1).setValue(data.amount);
+    
+    // If this is the active version, update project
+    if (currentRow[isActiveCol] === 'true') {
+      updateProjectAmount(projectId, data.amount);
+    }
+
+    logActivity({
+      action: 'ESTIMATE_AMOUNT_UPDATED',
+      moduleType: 'ESTIMATE',
+      referenceId: data.estimateId,
+      userEmail: data.userEmail,
+      details: {
+        oldAmount,
+        newAmount: data.amount,
+        projectId
+      }
+    });
+
+    return {
+      success: true,
+      data: {
+        estimateId: data.estimateId,
+        projectId,
+        amount: data.amount,
+        version: currentRow[versionCol],
+        status: oldStatus
+      }
+    };
+  }
+}
+
 // ==========================================
 // VENDOR FUNCTIONS
 // ==========================================

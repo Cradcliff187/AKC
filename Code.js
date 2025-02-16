@@ -1123,6 +1123,21 @@ function updateProjectStatusForClient(data) {
   }
 }
 
+function updateEstimateAmountForClient(data) {
+  const context = 'updateEstimateAmountForClient';
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    const result = updateEstimateWithAmount({
+      ...data,
+      userEmail
+    });
+
+    return createStandardResponse(true, result.data);
+  } catch (error) {
+    return handleError(error, context);
+  }
+}
+
 function loadPreviousEstimateVersion(data) {
   const context = 'loadPreviousEstimateVersion';
   try {
