@@ -1,18 +1,18 @@
 <script>
+import React, { useState, useEffect, useRef } from 'react';
+
 const CustomerEstimatesManager = ({ customer, onBack, showMessage }) => {
   // Enhanced state management
-  const [estimates, setEstimates] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [selectedEstimate, setSelectedEstimate] = React.useState(null);
-  const [isCreatingVersion, setIsCreatingVersion] = React.useState(false);
-  const [filterStatus, setFilterStatus] = React.useState('all');
-  const [activeProject, setActiveProject] = React.useState(null);
-  const [versionHistory, setVersionHistory] = React.useState([]);
+  const [estimates, setEstimates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEstimate, setSelectedEstimate] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   
-  const mountedRef = React.useRef(true);
+  const mountedRef = useRef(true);
 
-  // Initialize with proper data loading
-  React.useEffect(() => {
+  useEffect(() => {
     mountedRef.current = true;
     if (customer?.customerId) {
       loadEstimatesData();
@@ -20,12 +20,10 @@ const CustomerEstimatesManager = ({ customer, onBack, showMessage }) => {
     return () => { mountedRef.current = false; };
   }, [customer?.customerId]);
 
-  // Comprehensive data loading
   const loadEstimatesData = async () => {
     if (!mountedRef.current) return;
     setLoading(true);
     try {
-      // Get all estimates for customer
       const response = await new Promise(resolve => {
         google.script.run
           .withSuccessHandler(resolve)
@@ -36,10 +34,8 @@ const CustomerEstimatesManager = ({ customer, onBack, showMessage }) => {
       if (!mountedRef.current) return;
 
       if (response.success) {
-        // Process estimates to group by project and version
-        const processedEstimates = processEstimates(response.data);
-        setEstimates(processedEstimates.allEstimates);
-        setVersionHistory(processedEstimates.versionGroups);
+        const processedData = processEstimates(response.data);
+        setEstimates(processedData.estimates);
       } else {
         showMessage(response.error || 'Failed to load estimates', 'error');
       }
@@ -54,81 +50,22 @@ const CustomerEstimatesManager = ({ customer, onBack, showMessage }) => {
     }
   };
 
-  // Process estimates into version groups
-  const processEstimates = (rawEstimates) => {
-    // Group by project
-    const projectGroups = {};
-    const versionGroups = {};
-
-    rawEstimates.forEach(estimate => {
-      const projectId = estimate.ProjectID;
-      if (!projectGroups[projectId]) {
-        projectGroups[projectId] = [];
-      }
-      projectGroups[projectId].push(estimate);
-
-      // Track version history
-      if (!versionGroups[estimate.EstimateID]) {
-        versionGroups[estimate.EstimateID] = {
-          versions: [],
-          currentVersion: null
-        };
-      }
-      // Add to version history
-      versionGroups[estimate.EstimateID].versions.push({
-        version: estimate.VersionNumber,
-        status: estimate.Status,
-        amount: estimate.EstimatedAmount,
-        date: estimate.DateCreated,
-        isActive: estimate.IsActive === 'true'
-      });
-
-      // Track current active version
-      if (estimate.IsActive === 'true') {
-        versionGroups[estimate.EstimateID].currentVersion = estimate.VersionNumber;
-      }
-    });
-
-    return {
-      allEstimates: rawEstimates,
-      projectGroups,
-      versionGroups
-    };
-  };
-
-  // Handle status updates with validation
   const handleStatusUpdate = async (estimateId, newStatus) => {
-    const estimate = estimates.find(e => e.EstimateID === estimateId);
-    if (!estimate) {
-      showMessage('Estimate not found', 'error');
-      return;
-    }
-
-    // Validate status transition
-    const currentStatus = estimate.Status;
-    const allowedTransitions = STATUS_TRANSITIONS.ESTIMATE[currentStatus];
-    
-    if (!allowedTransitions?.includes(newStatus)) {
-      showMessage(`Cannot transition from ${currentStatus} to ${newStatus}`, 'error');
-      return;
-    }
-
     try {
       const response = await new Promise(resolve => {
         google.script.run
           .withSuccessHandler(resolve)
           .withFailureHandler(err => resolve({ success: false, error: err.message }))
-          .updateEstimateStatusForClient({
+          .updateEstimateStatusWithSync({
             estimateId,
             newStatus,
-            currentStatus,
-            projectId: estimate.ProjectID
+            customerId: customer.customerId
           });
       });
 
       if (response.success) {
-        showMessage('Status updated successfully', 'success');
-        loadEstimatesData(); // Reload all data
+        showMessage(`Status updated to ${newStatus}`, 'success');
+        loadEstimatesData();
       } else {
         showMessage(response.error || 'Failed to update status', 'error');
       }
@@ -137,268 +74,241 @@ const CustomerEstimatesManager = ({ customer, onBack, showMessage }) => {
     }
   };
 
-  // Create new version of estimate
-  const handleCreateVersion = async (originalEstimate) => {
+  const handleCreateNewVersion = async (estimate) => {
     try {
-      // First load the previous version data
-      const versionDataResponse = await new Promise(resolve => {
+      const response = await new Promise(resolve => {
         google.script.run
           .withSuccessHandler(resolve)
           .withFailureHandler(err => resolve({ success: false, error: err.message }))
-          .loadPreviousEstimateVersion({
-            projectId: originalEstimate.ProjectID,
-            previousEstimateId: originalEstimate.EstimateID
+          .createNewEstimateVersion({
+            estimateId: estimate.estimateId,
+            projectId: estimate.projectId,
+            customerId: customer.customerId
           });
       });
 
-      if (!versionDataResponse.success) {
-        throw new Error(versionDataResponse.error || 'Failed to load previous version');
-      }
-
-      // Then create new version
-      const createResponse = await new Promise(resolve => {
-        google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(err => resolve({ success: false, error: err.message }))
-          .createAndSaveEstimate({
-            ...versionDataResponse.data,
-            customerId: customer.customerId,
-            projectId: originalEstimate.ProjectID,
-            previousVersionId: originalEstimate.EstimateID
-          });
-      });
-
-      if (createResponse.success) {
+      if (response.success) {
         showMessage('New version created successfully', 'success');
         loadEstimatesData();
       } else {
-        throw new Error(createResponse.error || 'Failed to create new version');
+        showMessage(response.error || 'Failed to create new version', 'error');
       }
     } catch (error) {
-      showMessage(error.message || 'Failed to create new version', 'error');
+      showMessage('Failed to create new version', 'error');
     }
   };
 
-  // View estimate document
-  const handleViewDocument = (estimate) => {
-    if (!estimate.DocUrl) {
-      showMessage('No document available', 'error');
-      return;
+  const handleSendEmail = async (estimateId, emailData) => {
+    try {
+      const response = await new Promise(resolve => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(err => resolve({ success: false, error: err.message }))
+          .sendEstimateEmail({
+            estimateId,
+            ...emailData
+          });
+      });
+
+      if (response.success) {
+        showMessage('Estimate sent successfully', 'success');
+        loadEstimatesData();
+      } else {
+        showMessage(response.error || 'Failed to send estimate', 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to send estimate', 'error');
     }
-    window.open(estimate.DocUrl, '_blank');
   };
 
-  // Calculate metrics
-  const calculateMetrics = () => {
-    return {
-      totalEstimates: estimates.length,
-      activeEstimates: estimates.filter(e => e.IsActive === 'true').length,
-      totalValue: estimates
-        .filter(e => e.IsActive === 'true')
-        .reduce((sum, e) => sum + (parseFloat(e.EstimatedAmount) || 0), 0),
-      pendingApproval: estimates.filter(e => e.Status === 'PENDING').length,
-      approvedEstimates: estimates.filter(e => e.Status === 'APPROVED').length
+  // UI Components
+
+  const StatusBadge = ({ status }) => {
+    const statusColors = {
+      DRAFT: 'bg-gray-100 text-gray-800',
+      PENDING_REVIEW: 'bg-yellow-100 text-yellow-800',
+      PENDING_CUSTOMER: 'bg-blue-100 text-blue-800',
+      APPROVED: 'bg-green-100 text-green-800',
+      REJECTED: 'bg-red-100 text-red-800',
+      IN_PROGRESS: 'bg-purple-100 text-purple-800',
+      COMPLETED: 'bg-teal-100 text-teal-800',
+      CANCELLED: 'bg-gray-100 text-gray-800'
     };
+
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[status] || 'bg-gray-100'}`}>
+        {status}
+      </span>
+    );
   };
 
-  // Render version history
-  const renderVersionHistory = (estimateId) => {
-    const history = versionHistory[estimateId];
-    if (!history) return null;
+  const EstimateActions = ({ estimate }) => {
+    const canEdit = ['DRAFT', 'PENDING_REVIEW'].includes(estimate.status);
+    const canCreateVersion = ['PENDING_CUSTOMER', 'REJECTED'].includes(estimate.status);
+    const canApprove = estimate.status === 'PENDING_CUSTOMER';
 
-    return React.createElement('div', { className: 'mt-2 pl-4 border-l-2 border-gray-200' },
-      history.versions.map(version => 
-        React.createElement('div', {
-          key: version.version,
-          className: `py-2 ${version.version === history.currentVersion ? 'font-semibold' : ''}`
-        },
-          React.createElement('span', { 
-            className: `inline-block mr-2 w-2 h-2 rounded-full ${
-              version.isActive ? 'bg-green-500' : 'bg-gray-300'
-            }`
-          }),
-          `Version ${version.version} - ${version.status} - ${
-            new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD'
-            }).format(version.amount)
-          } - ${new Date(version.date).toLocaleDateString()}`
-        )
-      )
+    return (
+      <div className="flex space-x-3">
+        <button
+          onClick={() => window.open(estimate.docUrl, '_blank')}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          View
+        </button>
+        {canEdit && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-green-600 hover:text-green-800"
+          >
+            Edit
+          </button>
+        )}
+        {canCreateVersion && (
+          <button
+            onClick={() => handleCreateNewVersion(estimate)}
+            className="text-purple-600 hover:text-purple-800"
+          >
+            New Version
+          </button>
+        )}
+        {canApprove && (
+          <button
+            onClick={() => handleStatusUpdate(estimate.estimateId, 'APPROVED')}
+            className="text-green-600 hover:text-green-800"
+          >
+            Approve
+          </button>
+        )}
+      </div>
     );
   };
 
   // Main render
-  return React.createElement('div', { className: 'space-y-6' },
-    // Header with back button and customer info
-    React.createElement('div', { className: 'flex justify-between items-center' },
-      React.createElement('div', null,
-        React.createElement('h2', { className: 'text-2xl font-bold text-gray-900' },
-          `Estimates - ${customer.name}`
-        ),
-        React.createElement('p', { className: 'mt-1 text-sm text-gray-500' },
-          `Customer ID: ${customer.customerId}`
-        )
-      ),
-      React.createElement('button', {
-        onClick: onBack,
-        className: 'text-blue-600 hover:text-blue-800'
-      }, '← Back to Customer')
-    ),
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Estimates - {customer.name}
+          </h2>
+          <p className="text-sm text-gray-500">
+            Customer ID: {customer.customerId}
+          </p>
+        </div>
+        <button
+          onClick={onBack}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          ← Back to Customer
+        </button>
+      </div>
 
-    // Metrics
-    React.createElement('div', { className: 'grid grid-cols-5 gap-4' },
-      Object.entries(calculateMetrics()).map(([key, value]) =>
-        React.createElement('div', {
-          key,
-          className: 'bg-white rounded-lg shadow p-4'
-        },
-          React.createElement('h3', { className: 'text-sm font-medium text-gray-500' },
-            key.replace(/([A-Z])/g, ' $1').trim()
-          ),
-          React.createElement('p', { className: 'mt-2 text-2xl font-semibold text-gray-900' },
-            typeof value === 'number' && key.toLowerCase().includes('value')
-              ? new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD'
-                }).format(value)
-              : value
-          )
-        )
-      )
-    ),
+      {/* Estimates List */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900">
+              Estimates
+            </h3>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm"
+            >
+              <option value="all">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_REVIEW">Pending Review</option>
+              <option value="PENDING_CUSTOMER">Pending Customer</option>
+              <option value="APPROVED">Approved</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </div>
+        </div>
 
-    // Estimates List
-    React.createElement('div', { className: 'bg-white shadow rounded-lg' },
-      React.createElement('div', { className: 'px-4 py-5 border-b border-gray-200 sm:px-6' },
-        React.createElement('div', { className: 'flex justify-between items-center' },
-          React.createElement('h3', { className: 'text-lg font-medium text-gray-900' },
-            'Estimates List'
-          ),
-          React.createElement('div', { className: 'flex space-x-3' },
-            React.createElement('select', {
-              value: filterStatus,
-              onChange: e => setFilterStatus(e.target.value),
-              className: 'rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
-            },
-              React.createElement('option', { value: 'all' }, 'All Statuses'),
-              Object.values(ESTIMATE_STATUSES).map(status =>
-                React.createElement('option', { key: status, value: status }, status)
-              )
-            )
-          )
-        )
-      ),
-      React.createElement('div', { className: 'overflow-x-auto' },
-        React.createElement('table', { className: 'min-w-full divide-y divide-gray-200' },
-          React.createElement('thead', { className: 'bg-gray-50' },
-            React.createElement('tr', null,
-              ['Project', 'Estimate ID', 'Version', 'Status', 'Amount', 'Created', 'Actions'].map(header =>
-                React.createElement('th', {
-                  key: header,
-                  className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                }, header)
-              )
-            )
-          ),
-          React.createElement('tbody', { className: 'bg-white divide-y divide-gray-200' },
-            estimates
-              .filter(estimate => filterStatus === 'all' || estimate.Status === filterStatus)
-              .map(estimate => 
-                React.createElement(React.Fragment, { key: estimate.EstimateID },
-                  React.createElement('tr', { className: 'hover:bg-gray-50' },
-                    // Project
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                      estimate.ProjectID
-                    ),
-                    // Estimate ID
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                      estimate.EstimateID,
-                      estimate.IsActive === 'true' && React.createElement('span', {
-                        className: 'ml-2 px-2 py-1 text-xs font-medium text-green-800 bg-green-100 rounded-full'
-                      }, 'Active')
-                    ),
-                    // Version
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                      `v${estimate.VersionNumber}`
-                    ),
-                    // Status
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                      React.createElement('select', {
-                        value: estimate.Status,
-                        onChange: e => handleStatusUpdate(estimate.EstimateID, e.target.value),
-                        className: `rounded-md text-sm font-medium ${
-                          estimate.Status === 'APPROVED' ? 'text-green-800 bg-green-100' :
-                          estimate.Status === 'PENDING' ? 'text-yellow-800 bg-yellow-100' :
-                          estimate.Status === 'REJECTED' ? 'text-red-800 bg-red-100' :
-                          'text-gray-800 bg-gray-100'
-                        }`
-                      },
-                        Object.values(ESTIMATE_STATUSES).map(status =>
-                          React.createElement('option', {
-                            key: status,
-                            value: status,
-                            disabled: !STATUS_TRANSITIONS.ESTIMATE[estimate.Status]?.includes(status)
-                          }, status)
-                        )
-                      )
-                    ),
-                    // Amount
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                      new Intl.NumberFormat('en-US', {
-                        style: 'currency', currency: 'USD'
-                      }).format(estimate.EstimatedAmount)
-                    ),
-                    // Created Date
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                      new Date(estimate.DateCreated).toLocaleDateString()
-                    ),
-                    // Actions
-                    React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium' },
-                      React.createElement('div', { className: 'flex space-x-3 justify-end' },
-                        // View Document
-                        React.createElement('button', {
-                          onClick: () => handleViewDocument(estimate),
-                          disabled: !estimate.DocUrl,
-                          className: `text-blue-600 hover:text-blue-900 ${!estimate.DocUrl ? 'opacity-50 cursor-not-allowed' : ''}`
-                        }, 'View'),
-                        // Create New Version (only for specific statuses)
-                        ['APPROVED', 'REJECTED'].includes(estimate.Status) &&
-                          React.createElement('button', {
-                            onClick: () => handleCreateVersion(estimate),
-                            className: 'text-green-600 hover:text-green-900'
-                          }, 'New Version'),
-                        // Toggle Version History
-                        React.createElement('button', {
-                          onClick: () => {
-                            setSelectedEstimate(
-                              selectedEstimate?.EstimateID === estimate.EstimateID ? null : estimate
-                            );
-                          },
-                          className: 'text-gray-600 hover:text-gray-900'
-                        }, 'History')
-                      )
-                    )
-                  ),
-                  // Version History Expansion
-                  selectedEstimate?.EstimateID === estimate.EstimateID &&
-                    React.createElement('tr', null,
-                      React.createElement('td', { 
-                        colSpan: '7',
-                        className: 'px-6 py-4 bg-gray-50'
-                      },
-                        renderVersionHistory(estimate.EstimateID)
-                      )
-                    )
-                )
-              )
-          )
-        )
-      )
-    )
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Estimate ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Version
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {estimates.map((estimate) => (
+                <tr key={estimate.estimateId} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="text-sm font-medium text-gray-900">
+                        {estimate.estimateId}
+                      </div>
+                      {estimate.isActive && (
+                        <span className="ml-2 px-2 py-1 text-xs font-medium text-green-800 bg-green-100 rounded-full">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      v{estimate.versionNumber}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <StatusBadge status={estimate.status} />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD'
+                      }).format(estimate.amount)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {new Date(estimate.dateCreated).toLocaleDateString()}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <EstimateActions estimate={estimate} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Email Dialog */}
+      {emailDialogOpen && selectedEstimate && (
+        <EmailDialog
+          estimate={selectedEstimate}
+          onClose={() => setEmailDialogOpen(false)}
+          onSend={handleSendEmail}
+          customerEmail={customer.email}
+        />
+      )}
+    </div>
   );
 };
 
-// Export to window
-window.CustomerEstimatesManager = CustomerEstimatesManager;
+export default CustomerEstimatesManager;
 </script>

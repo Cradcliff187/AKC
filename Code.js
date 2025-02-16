@@ -3,6 +3,23 @@
  **************************************/
 
 // ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+function extractFolderIdFromUrl(folderUrl) {
+  const urlPatterns = [
+    /\/folders\/([a-zA-Z0-9-_]+)/, 
+    /\/drive\/folders\/([a-zA-Z0-9-_]+)/, 
+    /id=([a-zA-Z0-9-_]+)/
+  ];
+  for (let pattern of urlPatterns) {
+    const match = folderUrl.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  throw new Error("Could not extract folder ID from the provided URL");
+}
+
+// ==========================================
 // WEBAPP INITIALIZATION
 // ==========================================
 
@@ -26,9 +43,9 @@ function getProjects() {
   const context = 'getProjects';
   try {
     const projects = getActiveProjects();
-    return createStandardResponse(true, projects);
+    return createStandardResponse(true, projects); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -103,14 +120,14 @@ function createProject(data) {
     const requiredFields = ['customerId', 'projectName'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     // 2) Get customer data to ensure we have all necessary info
     const customers = getCustomerData();
     const customer = customers.find(c => c.customerId === data.customerId);
     if (!customer) {
-      return createStandardResponse(false, null, 'Customer not found');
+      return createStandardResponse(false, null, 'Customer not found'); // USE Utils.js
     }
 
     // 3) Create project record with enriched data
@@ -127,7 +144,7 @@ function createProject(data) {
     }
 
     // 5) Log activity with enriched data
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'PROJECT_CREATED',
       'PROJECT',
       result.data.projectId,
@@ -142,12 +159,12 @@ function createProject(data) {
     );
 
     // 6) Return the newly created project
-    return createStandardResponse(true, result.data);
+    return createStandardResponse(true, result.data); // USE Utils.js
 
   } catch (error) {
     Logger.log(`Error in ${context}: ${error.message}`);
     Logger.log(`Stack: ${error.stack}`);
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -162,7 +179,7 @@ function submitTimeLog(data) {
     const requiredFields = ['date', 'startTime', 'endTime', 'projectId'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     const submittingUser = Session.getActiveUser().getEmail();
@@ -173,7 +190,7 @@ function submitTimeLog(data) {
     const hours = (endTime - startTime) / (1000 * 60 * 60);
     
     if (hours <= 0) {
-      return createStandardResponse(false, null, "End time must be after start time");
+      return createStandardResponse(false, null, "End time must be after start time"); // USE Utils.js
     }
 
     // Insert into DB
@@ -188,7 +205,7 @@ function submitTimeLog(data) {
     });
 
     // Log activity
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'TIME_LOG_CREATED',
       'TIME',
       result.id,
@@ -201,9 +218,9 @@ function submitTimeLog(data) {
       }
     );
 
-    return createStandardResponse(true, result);
+    return createStandardResponse(true, result); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -218,13 +235,13 @@ function submitMaterialsReceipt(data) {
     const requiredFields = ['projectId', 'vendorId', 'vendorName', 'amount'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     // Validate amount is a positive number
     const amount = parseFloat(data.amount);
     if (isNaN(amount) || amount <= 0) {
-      return createStandardResponse(false, null, "Amount must be a positive number");
+      return createStandardResponse(false, null, "Amount must be a positive number"); // USE Utils.js
     }
 
     const submittingUser = Session.getActiveUser().getEmail();
@@ -247,7 +264,7 @@ function submitMaterialsReceipt(data) {
     }
 
     // Log activity using standardized function
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'MATERIALS_RECEIPT_CREATED',
       'MATERIALS',
       result.id,
@@ -261,24 +278,28 @@ function submitMaterialsReceipt(data) {
       }
     );
 
-    return createStandardResponse(true, {
+    return createStandardResponse(true, { // USE Utils.js
       id: result.id,
-      amount: formatCurrency(amount),
+      amount: formatCurrency(amount), // USE Utils.js
       timestamp: formatDate(new Date(), 'iso')
     });
 
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
+
+// ==========================================
+// VENDOR MANAGEMENT
+// ==========================================
 
 function getVendorsForClient() {
   const context = 'getVendorsForClient';
   try {
     const vendors = getVendors();
-    return createStandardResponse(true, vendors);
+    return createStandardResponse(true, vendors); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -291,7 +312,7 @@ function createVendorForClient(data) {
     // Validate input
     if (!data || !data.vendorName) {
       Logger.log('Error: Missing vendorName in input');
-      return createStandardResponse(false, null, 'Vendor name is required');
+      return createStandardResponse(false, null, 'Vendor name is required'); // USE Utils.js
     }
 
     // Validate required fields
@@ -299,7 +320,7 @@ function createVendorForClient(data) {
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
       Logger.log('Validation failed: ' + validation.error);
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     // Create vendor
@@ -309,11 +330,11 @@ function createVendorForClient(data) {
 
     if (!result || !result.success) {
       Logger.log('Error: Vendor creation failed');
-      return createStandardResponse(false, null, 'Failed to create vendor');
+      return createStandardResponse(false, null, 'Failed to create vendor'); // USE Utils.js
     }
 
     // Log activity
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'VENDOR_CREATED',
       'VENDOR',
       result.data.vendorId,
@@ -323,12 +344,12 @@ function createVendorForClient(data) {
     );
 
     Logger.log('Vendor created successfully: ' + JSON.stringify(result.data));
-    return createStandardResponse(true, result.data);
+    return createStandardResponse(true, result.data); // USE Utils.js
 
   } catch (error) {
     Logger.log('Error in createVendorForClient: ' + error.message);
     Logger.log('Stack: ' + error.stack);
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -339,9 +360,9 @@ function createVendorForClient(data) {
 function getSubcontractorsForClient() {
   try {
     const subcontractors = getSubcontractors();
-    return { success: true, data: subcontractors };
+    return createStandardResponse(true, subcontractors); // USE Utils.js
   } catch (error) {
-    return { success: false, error: error.message };
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -351,7 +372,7 @@ function submitSubInvoice(data) {
     const requiredFields = ['projectId', 'projectName', 'subId', 'subName', 'invoiceAmount'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     const submittingUser = Session.getActiveUser().getEmail();
@@ -359,7 +380,7 @@ function submitSubInvoice(data) {
     // Validate amount
     const amount = parseFloat(data.invoiceAmount);
     if (isNaN(amount) || amount <= 0) {
-      return createStandardResponse(false, null, "Invoice amount must be a positive number");
+      return createStandardResponse(false, null, "Invoice amount must be a positive number"); // USE Utils.js
     }
 
     const result = logSubInvoice({
@@ -377,7 +398,7 @@ function submitSubInvoice(data) {
       updateSubInvoiceDocUrl(result.id, data.invoiceDocURL, "");
     }
 
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'SUBINVOICE_CREATED',
       'SUBINVOICE',
       result.id,
@@ -386,17 +407,17 @@ function submitSubInvoice(data) {
         projectName: data.projectName,
         subId: data.subId,
         subName: data.subName,
-        invoiceAmount: formatCurrency(amount),
+        invoiceAmount: formatCurrency(amount), // USE Utils.js
         invoiceDocURL: data.invoiceDocURL || ''
       }
     );
 
-    return createStandardResponse(true, {
+    return createStandardResponse(true, { // USE Utils.js
       id: result.id,
-      amount: formatCurrency(amount)
+      amount: formatCurrency(amount) // USE Utils.js
     });
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -412,7 +433,7 @@ function getCustomersForClient() {
     const sheet = getSheet(CONFIG.SHEETS.CUSTOMERS);
     if (!sheet) {
       Logger.log('ERROR: Could not access Customers sheet');
-      return createStandardResponse(false, null, 'Could not access customer data');
+      return createStandardResponse(false, null, 'Could not access customer data'); // USE Utils.js
     }
 
     // Get all data including headers
@@ -437,7 +458,7 @@ function getCustomersForClient() {
     if (customerIdCol === -1 || nameCol === -1) {
       Logger.log('ERROR: Required columns not found');
       Logger.log('Headers:', headers);
-      return createStandardResponse(false, null, 'Customer data sheet is missing required columns');
+      return createStandardResponse(false, null, 'Customer data sheet is missing required columns'); // USE Utils.js
     }
 
     // Transform data
@@ -467,24 +488,13 @@ function getCustomersForClient() {
       });
 
     Logger.log(`Returning ${customers.length} valid customers`);
-    return createStandardResponse(true, customers);
+    return createStandardResponse(true, customers); // USE Utils.js
 
   } catch (error) {
     Logger.log('ERROR in getCustomersForClient:', error.message);
     Logger.log('Stack:', error.stack);
-    return createStandardResponse(false, null, `Error getting customers: ${error.message}`);
+    return createStandardResponse(false, null, `Error getting customers: ${error.message}`); // USE Utils.js
   }
-}
-
-// Utility function for standard response format
-function createStandardResponse(success, data = null, error = null) {
-  const response = { success };
-  if (success) {
-    response.data = data;
-  } else {
-    response.error = error || 'Unknown error occurred';
-  }
-  return response;
 }
 
 function createCustomer(data) {
@@ -492,9 +502,66 @@ function createCustomer(data) {
   try {
     const result = createCustomerRecord(data);
     // Use standardized response format
-    return createStandardResponse(true, result.data);
+    return createStandardResponse(true, result.data); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
+  }
+}
+
+function getCustomerDetailsForClient(customerId) {
+  const context = 'getCustomerDetailsForClient';
+  try {
+    const customers = getCustomerData();
+    const customer = customers.find(c => c.customerId === customerId);
+    
+    if (!customer) {
+      return createStandardResponse(false, null, 'Customer not found'); // USE Utils.js
+    }
+    
+    const enrichedCustomer = enrichCustomerData(customer);
+    return createStandardResponse(true, enrichedCustomer); // USE Utils.js
+  } catch (error) {
+    return handleError(error, context); // USE Utils.js
+  }
+}
+
+function updateCustomerStatus(data) {
+  const context = 'updateCustomerStatus';
+  try {
+    const sheet = getSheet(CONFIG.SHEETS.CUSTOMERS);
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    
+    const customerIdCol = headers.indexOf("CustomerID");
+    let statusCol = headers.indexOf("Status");
+    
+    // If Status column not found by name, use last column
+    if (statusCol === -1) {
+      statusCol = headers.length - 1;
+    }
+    
+    Logger.log(`CustomerID column: ${customerIdCol}`);
+    Logger.log(`Status column: ${statusCol}`);
+    
+    const rowIndex = values.findIndex(row => row[customerIdCol] === data.customerId);
+    if (rowIndex === -1) {
+      throw new Error('Customer not found');
+    }
+    
+    // Update status with proper range validation
+    if (rowIndex >= 0 && statusCol >= 0) {
+      sheet.getRange(rowIndex + 1, statusCol + 1).setValue(data.newStatus);
+      return createStandardResponse(true, { // USE Utils.js
+        customerId: data.customerId,
+        status: data.newStatus
+      });
+    } else {
+      throw new Error('Invalid row or column index');
+    }
+  } catch (error) {
+    Logger.log(`Error in ${context}: ${error.message}`);
+    Logger.log(`Stack: ${error.stack}`);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -515,20 +582,20 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
     // Validate required inputs
     if (!base64Data || !folderId) {
       Logger.log('Missing base64 data or folder ID');
-      return createStandardResponse(false, null, "Missing base64 data or folder ID");
+      return createStandardResponse(false, null, "Missing base64 data or folder ID"); // USE Utils.js
     }
 
     // Validate folder ID
     if (typeof folderId !== 'string' || folderId.trim() === '') {
       Logger.log('Invalid folder ID format');
-      return createStandardResponse(false, null, "Invalid folder ID format");
+      return createStandardResponse(false, null, "Invalid folder ID format"); // USE Utils.js
     }
 
     // More robust MIME type extraction
     const mimeTypeMatch = base64Data.match(/^data:(.*?);base64,/);
     if (!mimeTypeMatch) {
       Logger.log('Invalid base64 data format');
-      return createStandardResponse(false, null, "Invalid base64 data format");
+      return createStandardResponse(false, null, "Invalid base64 data format"); // USE Utils.js
     }
 
     const mimeType = mimeTypeMatch[1];
@@ -541,7 +608,7 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
     if (!allowedTypes.includes(mimeType)) {
       Logger.log('Disallowed file type: ' + mimeType);
-      return createStandardResponse(false, null, `File type ${mimeType} is not allowed`);
+      return createStandardResponse(false, null, `File type ${mimeType} is not allowed`); // USE Utils.js
     }
 
     // Generate unique file ID
@@ -555,7 +622,7 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
       Logger.log('Successfully decoded base64 data');
     } catch (decodeError) {
       Logger.log('Base64 decoding error: ' + decodeError.message);
-      return createStandardResponse(false, null, "Failed to decode base64 data");
+      return createStandardResponse(false, null, "Failed to decode base64 data"); // USE Utils.js
     }
 
     // Create blob
@@ -566,10 +633,10 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
     );
 
     // Validate file size (10MB max)
-    const sizeValidation = validateFileSize(fileBlob.getBytes().length);
+    const sizeValidation = validateFileSize(fileBlob.getBytes().length); // USE Utils.js
     if (!sizeValidation.valid) {
       Logger.log('File size validation failed');
-      return createStandardResponse(false, null, sizeValidation.error);
+      return createStandardResponse(false, null, sizeValidation.error); // USE Utils.js
     }
 
     // Verify folder exists with comprehensive debugging
@@ -597,7 +664,7 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
         Logger.log('Error retrieving project folders: ' + projectsError.message);
       }
 
-      return createStandardResponse(false, null, "Invalid folder ID: " + folderId);
+      return createStandardResponse(false, null, "Invalid folder ID: " + folderId); // USE Utils.js
     }
 
     // Upload to Drive with enhanced error handling
@@ -620,11 +687,11 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
     } catch (uploadError) {
       Logger.log('Drive upload error: ' + uploadError.message);
       Logger.log('Full error object: ' + JSON.stringify(uploadError));
-      return createStandardResponse(false, null, "Failed to upload file to Drive: " + uploadError.message);
+      return createStandardResponse(false, null, "Failed to upload file to Drive: " + uploadError.message); // USE Utils.js
     }
 
     // Log activity
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'FILE_UPLOADED',
       'FILE_STORAGE',
       uploadedFile.id,
@@ -638,7 +705,7 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
     );
 
     // Return successful response
-    return createStandardResponse(true, {
+    return createStandardResponse(true, { // USE Utils.js
       url: `https://drive.google.com/file/d/${uploadedFile.id}/view`,
       name: uploadedFile.name,
       mimeType: uploadedFile.mimeType,
@@ -651,26 +718,14 @@ function uploadReceiptFile(base64Data, folderId, fileType = 'MATREC') {
     Logger.log('Error Message: ' + error.message);
     Logger.log('Error Stack: ' + error.stack);
     console.error('Unexpected error:', error);
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
-}
-
-function extractFolderIdFromUrl(folderUrl) {
-  const urlPatterns = [
-    /\/folders\/([a-zA-Z0-9-_]+)/, 
-    /\/drive\/folders\/([a-zA-Z0-9-_]+)/, 
-    /id=([a-zA-Z0-9-_]+)/
-  ];
-  for (let pattern of urlPatterns) {
-    const match = folderUrl.match(pattern);
-    if (match && match[1]) return match[1];
-  }
-  throw new Error("Could not extract folder ID from the provided URL");
 }
 
 // ==========================================
 // ESTIMATE DOCUMENT GENERATION
 // ==========================================
+
 function generateEstimateDocument(data) {
   try {
     Logger.log("=== Starting generateEstimateDocument ===");
@@ -721,8 +776,8 @@ function generateEstimateDocument(data) {
           table.getCell(rowIndex, 0).clear().setText(item.itemService || '');
           table.getCell(rowIndex, 1).clear().setText(item.description || '');
           table.getCell(rowIndex, 2).clear().setText(item.qtyHours || '');
-          table.getCell(rowIndex, 3).clear().setText(formatCurrency(numericRate));
-          table.getCell(rowIndex, 4).clear().setText(formatCurrency(numericAmount));
+          table.getCell(rowIndex, 3).clear().setText(formatCurrency(numericRate)); // USE Utils.js
+          table.getCell(rowIndex, 4).clear().setText(formatCurrency(numericAmount)); // USE Utils.js
 
           Logger.log(`Wrote row ${rowIndex}: ${JSON.stringify(item)}`);
         }
@@ -775,7 +830,7 @@ function createAndSaveEstimate(data) {
     const requiredFields = ['customerName', 'projectName', 'scopeOfWork', 'tableItems', 'totalAmount'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     // 2. Create project record if this is a new estimate
@@ -851,7 +906,7 @@ function createAndSaveEstimate(data) {
     }
 
     // 6. Log activity
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'ESTIMATE_CREATED',
       'ESTIMATE',
       estimateId,
@@ -865,7 +920,7 @@ function createAndSaveEstimate(data) {
     );
 
     // 7. Return success with estimate info
-    return createStandardResponse(true, {
+    return createStandardResponse(true, { // USE Utils.js
       estimateId,
       projectId,
       status: data.status || 'DRAFT',
@@ -876,7 +931,7 @@ function createAndSaveEstimate(data) {
   } catch (error) {
     Logger.log(`Error in ${context}: ${error.message}`);
     Logger.log(`Stack: ${error.stack}`);
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -891,7 +946,7 @@ function sendEstimateEmail(data) {
     const requiredFields = ['estimateId', 'recipientEmail', 'docId'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     // Get the document and create PDF
@@ -912,7 +967,7 @@ function sendEstimateEmail(data) {
 
 Please find attached your estimate (${data.estimateId}) for ${data.projectName}.
 
-Total Amount: ${formatCurrency(data.amount)}
+Total Amount: ${formatCurrency(data.amount)} // USE Utils.js
 
 ${data.notes ? '\nAdditional Notes:\n' + data.notes + '\n' : ''}
 
@@ -934,7 +989,7 @@ AKC LLC`;
     );
 
     // Log activity
-    logSystemActivity(
+    logSystemActivity( // USE Utils.js
       'ESTIMATE_EMAILED',
       'ESTIMATE',
       data.estimateId,
@@ -945,7 +1000,7 @@ AKC LLC`;
       }
     );
 
-    return createStandardResponse(true, {
+    return createStandardResponse(true, { // USE Utils.js
       sent: true,
       timestamp: new Date(),
       recipient: data.recipientEmail
@@ -954,32 +1009,13 @@ AKC LLC`;
   } catch (error) {
     Logger.log(`Error in ${context}: ${error.message}`);
     Logger.log(`Stack: ${error.stack}`);
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
-}
-
-// ==========================================
-// UTILITY
-// ==========================================
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
-}
-
-function testGetTemplate() {
-  Logger.log("Template Doc ID: " + CONFIG.TEMPLATES.ESTIMATE.TEMPLATE_DOC_ID);
-  const file = DriveApp.getFileById(CONFIG.TEMPLATES.ESTIMATE.TEMPLATE_DOC_ID);
-  Logger.log("Template URL: " + file.getUrl());
 }
 
 // ==========================================
 // DATA SCHEMA AND STATUS CHANGE FUNCTIONS
 // ==========================================
-
-// Add to Code.gs - New client-facing functions
 
 function updateEstimateStatusForClient(data) {
   const context = 'updateEstimateStatusForClient';
@@ -988,7 +1024,7 @@ function updateEstimateStatusForClient(data) {
     const requiredFields = ['estimateId', 'newStatus'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     const userEmail = Session.getActiveUser().getEmail();
@@ -1000,9 +1036,65 @@ function updateEstimateStatusForClient(data) {
       userEmail
     );
 
-    return createStandardResponse(true, result.data);
+    return createStandardResponse(true, result.data); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
+  }
+}
+
+function updateEstimateStatusWithSync(data) {
+  const context = 'updateEstimateStatusWithSync';
+  try {
+    // Validate required fields: estimateId and newStatus.
+    const requiredFields = ['estimateId', 'newStatus'];
+    const validation = validateRequiredFields(data, requiredFields);
+    if (!validation.valid) {
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
+    }
+    
+    const userEmail = Session.getActiveUser().getEmail();
+    // Update the estimate status using the existing function.
+    const result = updateEstimateStatus(data.estimateId, data.newStatus, userEmail);
+    
+    // If the estimate is approved, update the linked project.
+    if (data.newStatus === 'APPROVED') {
+      // Retrieve the Estimates sheet data to get the associated ProjectID.
+      const sheet = getSheet(CONFIG.SHEETS.ESTIMATES);
+      const allData = sheet.getDataRange().getValues();
+      const headers = allData[0];
+      const estimateIdCol = headers.indexOf('EstimateID');
+      const projectIdCol = headers.indexOf('ProjectID');
+      
+      // Find the row that matches the estimateId.
+      const rowIndex = allData.findIndex(row => row[estimateIdCol] === data.estimateId);
+      if (rowIndex === -1) {
+        throw new Error(`Estimate ${data.estimateId} not found in sheet after update.`);
+      }
+      const projectId = allData[rowIndex][projectIdCol];
+      if (!projectId) {
+        throw new Error(`Associated project not found for estimate ${data.estimateId}.`);
+      }
+      
+      // Update the associated project's status to APPROVED.
+      const projectUpdateResult = updateProjectStatus(projectId, 'APPROVED', userEmail);
+      // (Optional: You could check projectUpdateResult for success if needed.)
+      
+      // Log the project status update (if not already logged inside updateProjectStatus).
+      logActivity({ // USE Utils.js
+        action: 'PROJECT_STATUS_UPDATED',
+        moduleType: 'PROJECT',
+        referenceId: projectId,
+        userEmail: userEmail,
+        details: {
+          newStatus: 'APPROVED',
+          relatedEstimate: data.estimateId
+        }
+      });
+    }
+    
+    return createStandardResponse(true, result); // USE Utils.js
+  } catch (error) {
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -1013,7 +1105,7 @@ function updateProjectStatusForClient(data) {
     const requiredFields = ['projectId', 'newStatus'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     const userEmail = Session.getActiveUser().getEmail();
@@ -1025,9 +1117,9 @@ function updateProjectStatusForClient(data) {
       userEmail
     );
 
-    return createStandardResponse(true, result.data);
+    return createStandardResponse(true, result.data); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -1038,7 +1130,7 @@ function loadPreviousEstimateVersion(data) {
     const requiredFields = ['projectId', 'previousEstimateId'];
     const validation = validateRequiredFields(data, requiredFields);
     if (!validation.valid) {
-      return createStandardResponse(false, null, validation.error);
+      return createStandardResponse(false, null, validation.error); // USE Utils.js
     }
 
     // Get previous estimate data
@@ -1051,7 +1143,7 @@ function loadPreviousEstimateVersion(data) {
     );
 
     if (!estimateRow) {
-      return createStandardResponse(false, null, 'Previous estimate not found');
+      return createStandardResponse(false, null, 'Previous estimate not found'); // USE Utils.js
     }
 
     // Create template for new version
@@ -1063,9 +1155,9 @@ function loadPreviousEstimateVersion(data) {
       previousVersionId: data.previousEstimateId
     };
 
-    return createStandardResponse(true, templateData);
+    return createStandardResponse(true, templateData); // USE Utils.js
   } catch (error) {
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
 
@@ -1081,7 +1173,7 @@ function getModuleVisibility(projectId) {
     
     const projectRow = data.find(row => row[projectIdCol] === projectId);
     if (!projectRow) {
-      return createStandardResponse(false, null, 'Project not found');
+      return createStandardResponse(false, null, 'Project not found'); // USE Utils.js
     }
 
     const status = projectRow[statusCol];
@@ -1089,73 +1181,12 @@ function getModuleVisibility(projectId) {
     // Only show modules if project is APPROVED or IN_PROGRESS
     const modulesEnabled = ['APPROVED', 'IN_PROGRESS'].includes(status);
     
-    return createStandardResponse(true, {
+    return createStandardResponse(true, { // USE Utils.js
       timeLogging: modulesEnabled,
       materialsReceipts: modulesEnabled,
       subInvoices: modulesEnabled
     });
   } catch (error) {
-    return handleError(error, context);
-  }
-}
-
-// ==========================================
-// CUSTOMER MANAGEMENT MODULE
-// ==========================================
-
-function getCustomerDetailsForClient(customerId) {
-  const context = 'getCustomerDetailsForClient';
-  try {
-    const customers = getCustomerData();
-    const customer = customers.find(c => c.customerId === customerId);
-    
-    if (!customer) {
-      return createStandardResponse(false, null, 'Customer not found');
-    }
-    
-    const enrichedCustomer = enrichCustomerData(customer);
-    return createStandardResponse(true, enrichedCustomer);
-  } catch (error) {
-    return handleError(error, context);
-  }
-}
-
-function updateCustomerStatus(data) {
-  const context = 'updateCustomerStatus';
-  try {
-    const sheet = getSheet(CONFIG.SHEETS.CUSTOMERS);
-    const values = sheet.getDataRange().getValues();
-    const headers = values[0];
-    
-    const customerIdCol = headers.indexOf("CustomerID");
-    let statusCol = headers.indexOf("Status");
-    
-    // If Status column not found by name, use last column
-    if (statusCol === -1) {
-      statusCol = headers.length - 1;
-    }
-    
-    Logger.log(`CustomerID column: ${customerIdCol}`);
-    Logger.log(`Status column: ${statusCol}`);
-    
-    const rowIndex = values.findIndex(row => row[customerIdCol] === data.customerId);
-    if (rowIndex === -1) {
-      throw new Error('Customer not found');
-    }
-    
-    // Update status with proper range validation
-    if (rowIndex >= 0 && statusCol >= 0) {
-      sheet.getRange(rowIndex + 1, statusCol + 1).setValue(data.newStatus);
-      return createStandardResponse(true, {
-        customerId: data.customerId,
-        status: data.newStatus
-      });
-    } else {
-      throw new Error('Invalid row or column index');
-    }
-  } catch (error) {
-    Logger.log(`Error in ${context}: ${error.message}`);
-    Logger.log(`Stack: ${error.stack}`);
-    return handleError(error, context);
+    return handleError(error, context); // USE Utils.js
   }
 }
