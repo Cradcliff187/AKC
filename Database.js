@@ -139,65 +139,147 @@ function getCustomers() {
 }
 
 function getCustomerProjects(customerId) {
-  const { headers, rows } = getSheetData(CONFIG.SHEETS.PROJECTS);
-  
-  const projectIdCol = headers.indexOf("ProjectID");
-  const customerIdCol = headers.indexOf("CustomerID");
-  const nameCol = headers.indexOf("ProjectName");
-  const statusCol = headers.indexOf("Status");
-  const createdOnCol = headers.indexOf("CreatedOn");
-  const jobIdCol = headers.indexOf("JobID");
-  
-  return rows
-    .filter(row => row[customerIdCol] === customerId)
-    .map(row => ({
-      projectId: row[projectIdCol],
-      name: row[nameCol],
-      status: row[statusCol],
-      createdOn: row[createdOnCol],
-      jobId: row[jobIdCol] || ''
-    }));
+  const context = 'getCustomerProjects';
+  try {
+    const { headers, rows } = getSheetData(CONFIG.SHEETS.PROJECTS);
+
+    const projectIdCol   = headers.indexOf("ProjectID");
+    const custIdCol      = headers.indexOf("CustomerID");
+    const nameCol        = headers.indexOf("ProjectName");
+    const statusCol      = headers.indexOf("Status");
+    const createdOnCol   = headers.indexOf("CreatedOn");
+    const jobIdCol       = headers.indexOf("JobID");
+
+    // Validate required columns
+    if (
+      projectIdCol === -1 ||
+      custIdCol === -1 ||
+      nameCol === -1 ||
+      statusCol === -1
+    ) {
+      Logger.log(
+        `Missing required columns in Projects sheet. ` +
+        `projectIdCol=${projectIdCol}, custIdCol=${custIdCol}, nameCol=${nameCol}, ` +
+        `statusCol=${statusCol}`
+      );
+      return createStandardResponse(false, null, 'Required columns not found in Projects sheet');
+    }
+
+    const projects = rows
+      .filter(row => row[custIdCol] === customerId)
+      .map(row => ({
+        projectId: row[projectIdCol],
+        name:      row[nameCol],
+        status:    row[statusCol],
+        createdOn: row[createdOnCol],
+        jobId:     row[jobIdCol] || ''
+      }));
+
+    return createStandardResponse(true, projects);
+
+  } catch (error) {
+    return handleError(error, context);
+  }
 }
 
+
 function getCustomerEstimates(customerId) {
-  const { headers, rows } = getSheetData(CONFIG.SHEETS.ESTIMATES);
-  
-  const estimateIdCol = headers.indexOf("EstimateID");
-  const projectIdCol = headers.indexOf("ProjectID");
-  const customerIdCol = headers.indexOf("CustomerID");
-  const dateCol = headers.indexOf("DateCreated");
-  const amountCol = headers.indexOf("EstimatedAmount");
-  const statusCol = headers.indexOf("Status");
-  const versionCol = headers.indexOf("VersionNumber");
-  const isActiveCol = headers.indexOf("IsActive");
-  const approvedAmountCol = headers.indexOf("CurrentApprovedAmount");
-  
-  return rows
-    .filter(row => row[customerIdCol] === customerId)
-    .map(row => ({
-      estimateId: row[estimateIdCol],
-      projectId: row[projectIdCol],
-      dateCreated: row[dateCol],
-      amount: parseFloat(row[amountCol]) || 0,
-      status: row[statusCol],
-      versionNumber: row[versionCol],
-      isActive: row[isActiveCol] === 'true',
-      approvedAmount: parseFloat(row[approvedAmountCol]) || 0
-    }));
+  const context = 'getCustomerEstimates';
+  try {
+    Logger.log(`Fetching estimates for customer: ${customerId}`);
+    
+    // 1) Load data from the "Estimates" sheet
+    const { headers, rows } = getSheetData(CONFIG.SHEETS.ESTIMATES);
+    
+    // 2) Identify columns
+    const customerIdCol = headers.indexOf("CustomerID");
+    const estimateIdCol  = headers.indexOf("EstimateID");
+    const projectIdCol   = headers.indexOf("ProjectID");
+    const dateCol        = headers.indexOf("DateCreated");
+    const amountCol      = headers.indexOf("EstimatedAmount");
+    const statusCol      = headers.indexOf("Status");
+    const docUrlCol      = headers.indexOf("DocUrl");
+    const docIdCol       = headers.indexOf("DocId");
+    const versionCol     = headers.indexOf("VersionNumber");
+    const isActiveCol    = headers.indexOf("IsActive");
+    const scopeItemsCol  = headers.indexOf("ScopeItemsJSON");
+
+    // 3) Validate required columns
+    if (
+      customerIdCol === -1 ||
+      estimateIdCol === -1 ||
+      projectIdCol === -1 ||
+      statusCol === -1
+    ) {
+      Logger.log(
+        `Missing required columns in Estimates sheet. ` +
+        `customerIdCol=${customerIdCol}, estimateIdCol=${estimateIdCol}, ` +
+        `projectIdCol=${projectIdCol}, statusCol=${statusCol}`
+      );
+      return createStandardResponse(false, null, 'Required columns not found in Estimates sheet');
+    }
+
+    Logger.log(`Processing ${rows.length} total estimates...`);
+    
+    // 4) Filter for matching customer, then map fields
+    const customerEstimates = rows
+      .filter(row => row[customerIdCol] === customerId)
+      .map(row => ({
+        EstimateID:      row[estimateIdCol],
+        ProjectID:       row[projectIdCol],
+        DateCreated:     row[dateCol],
+        EstimatedAmount: parseFloat(row[amountCol]) || 0,
+        status:          row[statusCol],       // <--- renamed to "status"
+        DocUrl:          row[docUrlCol] || '',
+        DocId:           row[docIdCol] || '',
+        VersionNumber:   row[versionCol] || '1',
+        IsActive:        (row[isActiveCol] === 'true'),
+        ScopeItems:      row[scopeItemsCol] ? JSON.parse(row[scopeItemsCol]) : []
+      }));
+
+    Logger.log(`Found ${customerEstimates.length} estimates for customer ${customerId}`);
+    
+    // 5) Return standard response
+    return createStandardResponse(true, customerEstimates);
+    
+  } catch (error) {
+    Logger.log(`Error in ${context}: ${error.message}`);
+    Logger.log(`Stack: ${error.stack}`);
+    return handleError(error, context);
+  }
 }
 
 function enrichCustomerData(customer) {
-  // Get projects
-  const projects = getCustomerProjects(customer.customerId);
+  // 1) Load projects
+  const projectsResp = getCustomerProjects(customer.customerId);
+  let projects = [];
+  if (projectsResp.success) {
+    projects = projectsResp.data; // the array of projects
+  } else {
+    Logger.log(`Failed to load projects for ${customer.customerId}: ${projectsResp.error}`);
+  }
   
-  // Get estimates
-  const estimates = getCustomerEstimates(customer.customerId);
-  
-  // Calculate metrics
+  // 2) Load estimates
+  const estimatesResp = getCustomerEstimates(customer.customerId);
+  let estimates = [];
+  if (estimatesResp.success) {
+    estimates = estimatesResp.data; // the array of estimates
+  } else {
+    Logger.log(`Failed to load estimates for ${customer.customerId}: ${estimatesResp.error}`);
+  }
+
+  // 3) Calculate metrics
   const activeProjects = projects.filter(p => p.status === 'IN_PROGRESS');
+  //  - ensure getCustomerEstimates returns e.status, not e.Status
   const approvedEstimates = estimates.filter(e => e.status === 'APPROVED');
-  const totalApprovedAmount = approvedEstimates.reduce((sum, e) => sum + e.approvedAmount, 0);
-  
+
+  //  - if your code used "approvedAmount", but your sheet sets "EstimatedAmount",
+  //    use e.EstimatedAmount for your sums:
+  const totalApprovedAmount = approvedEstimates.reduce(
+    (sum, e) => sum + (e.EstimatedAmount || 0),
+    0
+  );
+
   return {
     ...customer,
     projects,
@@ -209,9 +291,15 @@ function enrichCustomerData(customer) {
       totalEstimates: estimates.length,
       approvedEstimates: approvedEstimates.length,
       totalApprovedAmount,
-      estimateConversionRate: estimates.length ? (approvedEstimates.length / estimates.length) * 100 : 0,
-      averageProjectValue: projects.length ? totalApprovedAmount / projects.length : 0,
-      lastActivity: projects.length ? new Date(Math.max(...projects.map(p => new Date(p.createdOn)))) : null
+      estimateConversionRate: estimates.length 
+        ? (approvedEstimates.length / estimates.length) * 100 
+        : 0,
+      averageProjectValue: projects.length 
+        ? totalApprovedAmount / projects.length 
+        : 0,
+      lastActivity: projects.length 
+        ? new Date(Math.max(...projects.map(p => new Date(p.createdOn) || 0))) 
+        : null
     }
   };
 }

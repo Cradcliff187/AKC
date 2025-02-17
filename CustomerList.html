@@ -2,10 +2,10 @@
 const CustomerList = ({
   customers,
   onSelectCustomer,
-  onSendEstimate,
   onViewEstimates,
   onFilterChange,
-  onSearch
+  onSearch,
+  showMessage
 }) => {
   // Local state for filters
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -19,19 +19,44 @@ const CustomerList = ({
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-    onSearch(value);
+    if (onSearch) onSearch(value);
   };
 
   const handleStatusChange = (e) => {
     const value = e.target.value;
     setStatusFilter(value);
-    onFilterChange({ status: value, valueRange: valueRangeFilter });
+    if (onFilterChange) {
+      onFilterChange({ status: value, valueRange: valueRangeFilter });
+    }
   };
 
   const handleValueRangeChange = (min, max) => {
     setValueRangeFilter({ min, max });
-    onFilterChange({ status: statusFilter, valueRange: { min, max } });
+    if (onFilterChange) {
+      onFilterChange({ status: statusFilter, valueRange: { min, max } });
+    }
   };
+
+  // Filtered customers
+  const filteredCustomers = React.useMemo(() => {
+    return customers.filter(customer => {
+      // Search filter
+      const matchesSearch = !searchTerm || 
+        customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.customerId?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Status filter
+      const matchesStatus = statusFilter === 'All' || customer.status === statusFilter;
+
+      // Value range filter
+      const customerValue = customer.metrics?.totalRevenue || 0;
+      const matchesValueRange = 
+        (!valueRangeFilter.min || customerValue >= valueRangeFilter.min) &&
+        (!valueRangeFilter.max || customerValue <= valueRangeFilter.max);
+
+      return matchesSearch && matchesStatus && matchesValueRange;
+    });
+  }, [customers, searchTerm, statusFilter, valueRangeFilter]);
 
   // Export functionality
   const exportCustomerData = () => {
@@ -40,11 +65,11 @@ const CustomerList = ({
       'Name': customer.name,
       'Email': customer.email,
       'Phone': customer.phone,
-      'Total Projects': customer.metrics.totalProjects,
-      'Active Projects': customer.metrics.activeProjects,
-      'Total Revenue': customer.metrics.totalRevenue,
-      'Average Project Value': customer.metrics.averageProjectValue,
-      'Last Activity': customer.metrics.lastActivityDate
+      'Total Projects': customer.metrics?.totalProjects || 0,
+      'Active Projects': customer.metrics?.activeProjects || 0,
+      'Total Revenue': customer.metrics?.totalRevenue || 0,
+      'Average Project Value': customer.metrics?.averageProjectValue || 0,
+      'Last Activity': customer.metrics?.lastActivityDate || ''
     }));
 
     // Convert to CSV
@@ -58,7 +83,7 @@ const CustomerList = ({
       )
     ].join('\n');
 
-    // Create download link
+    // Create and trigger download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     if (link.download !== undefined) {
@@ -73,7 +98,7 @@ const CustomerList = ({
   };
 
   return React.createElement('div', { className: 'space-y-4' },
-    // Controls
+    // Controls Section
     React.createElement('div', { className: 'flex justify-between items-center' },
       React.createElement('div', { className: 'flex space-x-4' },
         // Search Input
@@ -123,57 +148,68 @@ const CustomerList = ({
     ),
 
     // Customer Table
-    React.createElement('table', { className: 'min-w-full divide-y divide-gray-200' },
-      React.createElement('thead', { className: 'bg-gray-50' },
-        React.createElement('tr', null,
-          ['Customer ID', 'Name', 'Email', 'Phone', 'Projects', 'Total Value', 'Status', 'Actions']
-            .map(header => 
-              React.createElement('th', {
-                key: header,
-                className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-              }, header)
-            )
-        )
-      ),
-      React.createElement('tbody', { className: 'bg-white divide-y divide-gray-200' },
-        customers.map(customer => 
-          React.createElement('tr', { key: customer.customerId },
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.customerId),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.name),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.email || 'N/A'),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.phone || 'N/A'),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, 
-              customer.metrics?.totalProjects || 0
-            ),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-              new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD'
-              }).format(customer.metrics?.totalRevenue || 0)
-            ),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-              React.createElement('span', {
-                className: `px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  customer.status === 'Active' 
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
-                }`
-              }, customer.status)
-            ),
-            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
-              React.createElement('div', { className: 'flex space-x-4' },
-                React.createElement('button', {
-                  onClick: () => onSelectCustomer(customer),
-                  className: 'text-indigo-600 hover:text-indigo-900'
-                }, 'View'),
-                React.createElement('button', {
-                  onClick: () => onViewEstimates(customer),
-                  className: 'text-blue-600 hover:text-blue-900'
-                }, 'Estimates'),
-                React.createElement('button', {
-                  onClick: () => onSendEstimate(customer.customerId),
-                  className: 'text-green-600 hover:text-green-900'
-                }, 'Send Estimate')
+    React.createElement('div', { className: 'bg-white shadow overflow-hidden sm:rounded-lg' },
+      React.createElement('table', { className: 'min-w-full divide-y divide-gray-200' },
+        React.createElement('thead', { className: 'bg-gray-50' },
+          React.createElement('tr', null,
+            ['Customer ID', 'Name', 'Email', 'Phone', 'Projects', 'Total Value', 'Status', 'Actions']
+              .map(header => 
+                React.createElement('th', {
+                  key: header,
+                  className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                }, header)
+              )
+          )
+        ),
+        React.createElement('tbody', { className: 'bg-white divide-y divide-gray-200' },
+          filteredCustomers.map(customer => 
+            React.createElement('tr', { 
+              key: customer.customerId,
+              className: 'hover:bg-gray-50'
+            },
+              React.createElement('td', { 
+                className: 'px-6 py-4 whitespace-nowrap cursor-pointer',
+                onClick: () => onSelectCustomer(customer)
+              }, customer.customerId),
+              React.createElement('td', { 
+                className: 'px-6 py-4 whitespace-nowrap cursor-pointer',
+                onClick: () => onSelectCustomer(customer)
+              }, customer.name),
+              React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                customer.email || 'N/A'
+              ),
+              React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                customer.phone || 'N/A'
+              ),
+              React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                `${customer.metrics?.activeProjects || 0} active / ${customer.metrics?.totalProjects || 0} total`
+              ),
+              React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD'
+                }).format(customer.metrics?.totalRevenue || 0)
+              ),
+              React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                React.createElement('span', {
+                  className: `px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    customer.status === 'Active' 
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`
+                }, customer.status)
+              ),
+              React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
+                React.createElement('div', { className: 'flex space-x-4' },
+                  React.createElement('button', {
+                    onClick: () => onViewEstimates(customer),
+                    className: 'text-indigo-600 hover:text-indigo-900'
+                  }, 'View Estimates'),
+                  React.createElement('button', {
+                    onClick: () => onSelectCustomer(customer),
+                    className: 'text-blue-600 hover:text-blue-900'
+                  }, 'View Details')
+                )
               )
             )
           )
@@ -183,6 +219,6 @@ const CustomerList = ({
   );
 };
 
-// Export to window
+// Expose to window object
 window.CustomerList = CustomerList;
 </script>

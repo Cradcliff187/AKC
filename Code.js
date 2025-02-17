@@ -511,19 +511,27 @@ function createCustomer(data) {
 function getCustomerDetailsForClient(customerId) {
   const context = 'getCustomerDetailsForClient';
   try {
-    const customers = getCustomerData();
+    // 1) Retrieve all customers from your "Customers" sheet or data store:
+    const customers = getCustomerData(); 
+    //    (We assume getCustomerData() returns an array of objects with .customerId, etc.)
+
+    // 2) Find the matching customer
     const customer = customers.find(c => c.customerId === customerId);
-    
     if (!customer) {
-      return createStandardResponse(false, null, 'Customer not found'); // USE Utils.js
+      return createStandardResponse(false, null, 'Customer not found');
     }
     
+    // 3) Enrich with projects, estimates, metrics
     const enrichedCustomer = enrichCustomerData(customer);
-    return createStandardResponse(true, enrichedCustomer); // USE Utils.js
+
+    // 4) Return the standard response
+    return createStandardResponse(true, enrichedCustomer);
+
   } catch (error) {
-    return handleError(error, context); // USE Utils.js
+    return handleError(error, context);
   }
 }
+
 
 function updateCustomerStatus(data) {
   const context = 'updateCustomerStatus';
@@ -819,6 +827,16 @@ function generateEstimateDocument(data) {
 // ==========================================
 // CREATE & SAVE ESTIMATE
 // ==========================================
+
+function getStatusConstants() {
+  return {
+    ESTIMATE_STATUSES,
+    PROJECT_STATUSES,
+    CUSTOMER_STATUSES,
+    STATUS_TRANSITIONS,
+    MODULE_ACCESS_STATUSES
+  };
+}
 
 function createAndSaveEstimate(data) {
   const context = 'createAndSaveEstimate';

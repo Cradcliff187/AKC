@@ -1,13 +1,12 @@
 <script>
-// CustomerManagement.html
-
+// CustomerManagement Component
 const CustomerManagement = () => {
   // State Management
   const [customers, setCustomers] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [message, setMessage] = React.useState({ text: '', type: '' });
   const [selectedCustomer, setSelectedCustomer] = React.useState(null);
-  const [viewMode, setViewMode] = React.useState('list');
+  const [viewMode, setViewMode] = React.useState('list'); // 'list', 'details', 'dashboard', 'estimates'
   const [activeTab, setActiveTab] = React.useState('overview');
 
   const mountedRef = React.useRef(true);
@@ -119,6 +118,22 @@ const CustomerManagement = () => {
     );
   };
 
+  // Handler for viewing estimates
+  const handleViewEstimates = (customer) => {
+    setSelectedCustomer(customer);
+    setViewMode('estimates');
+  };
+
+  // Handler for back navigation
+  const handleBack = () => {
+    if (viewMode === 'estimates') {
+      setViewMode('details');
+      setActiveTab('overview');
+    } else if (viewMode === 'details') {
+      setViewMode('list');
+    }
+  };
+
   // Main Render
   return React.createElement('div', { className: 'min-h-screen bg-gray-100' },
     React.createElement('div', { className: 'py-6' },
@@ -146,9 +161,7 @@ const CustomerManagement = () => {
                   setViewMode('details');
                   setActiveTab('overview');
                 },
-                onSearch: searchTerm => {
-                  // Implement search
-                },
+                onViewEstimates: handleViewEstimates,
                 showMessage
               })
             : viewMode === 'details' && selectedCustomer
@@ -158,7 +171,8 @@ const CustomerManagement = () => {
                     activeTab === 'overview'
                       ? React.createElement(window.CustomerDetails, {
                           customer: selectedCustomer,
-                          onBack: () => setViewMode('list'),
+                          onBack: handleBack,
+                          onViewEstimates: handleViewEstimates,
                           showMessage
                         })
                       : activeTab === 'contacts'
@@ -192,21 +206,27 @@ const CustomerManagement = () => {
                                   })
                   )
                 )
-              : React.createElement(window.CustomerDashboard, {
-                  customers,
-                  onSelectCustomer: customer => {
-                    setSelectedCustomer(customer);
-                    setViewMode('details');
-                    setActiveTab('overview');
-                  },
-                  showMessage
-                })
+              : viewMode === 'estimates' && selectedCustomer
+                ? React.createElement(window.CustomerEstimatesManager, {
+                    customer: selectedCustomer,
+                    onBack: handleBack,
+                    showMessage
+                  })
+                : React.createElement(window.CustomerDashboard, {
+                    customers,
+                    onSelectCustomer: customer => {
+                      setSelectedCustomer(customer);
+                      setViewMode('details');
+                      setActiveTab('overview');
+                    },
+                    showMessage
+                  })
         )
       )
     )
   );
 };
 
-// Export to window
+// Expose to window object
 window.CustomerManagement = CustomerManagement;
 </script>

@@ -1,0 +1,26 @@
+<script>
+// Initialize loading state
+console.log('Loading status constants from server...');
+
+// Load constants from server
+google.script.run
+  .withSuccessHandler(function(constants) {
+    console.log('Received constants from server:', constants);
+    
+    // Set constants on window object
+    window.ESTIMATE_STATUSES = constants.ESTIMATE_STATUSES;
+    window.PROJECT_STATUSES = constants.PROJECT_STATUSES;
+    window.CUSTOMER_STATUSES = constants.CUSTOMER_STATUSES;
+    window.STATUS_TRANSITIONS = constants.STATUS_TRANSITIONS;
+    window.MODULE_ACCESS_STATUSES = constants.MODULE_ACCESS_STATUSES;
+
+    // Dispatch event when constants are loaded
+    window.dispatchEvent(new Event('constants_loaded'));
+    
+    console.log('Frontend constants initialized');
+  })
+  .withFailureHandler(function(error) {
+    console.error('Failed to load constants:', error);
+  })
+  .getStatusConstants();
+</script>
