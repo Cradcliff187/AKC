@@ -1,5 +1,5 @@
 <script>
-const MaterialsReceipt = () => {
+const MaterialsReceipt = ({ projectId, onBack }) => {
   // ============ STATE MANAGEMENT ============
   // Project state
   const [projects, setProjects] = React.useState([]);
@@ -13,7 +13,7 @@ const MaterialsReceipt = () => {
   const [creatingNewVendor, setCreatingNewVendor] = React.useState(false);
   const [newVendorName, setNewVendorName] = React.useState('');
   
-  // Receipt details
+  // Receipt details matching blueprint MATERIALS_RECEIPTS schema
   const [amount, setAmount] = React.useState('');
   const [displayAmount, setDisplayAmount] = React.useState('');
   const [forUserEmail, setForUserEmail] = React.useState('');
@@ -24,6 +24,20 @@ const MaterialsReceipt = () => {
   const [loading, setLoading] = React.useState(false);
   const fileInputRef = React.useRef(null);
   const mountedRef = React.useRef(true);
+
+  const FILE_UPLOAD_CONFIG = {
+    types: ["image/jpeg", "image/png", "image/gif", "application/pdf"],
+    maxSize: 10485760,
+    multiple: false,
+    preview: true
+  };
+
+  // Component cleanup
+  React.useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // ============ LIFECYCLE ============
   React.useEffect(() => {
@@ -90,6 +104,26 @@ const MaterialsReceipt = () => {
     setMessage({ text, type });
   };
 
+  const handleApiError = (error) => {
+    console.error('API Error:', error);
+    const errorMessage = error.message || 'An unexpected error occurred';
+    showMessage(errorMessage, 'error');
+    
+    // Log activity if error
+    google.script.run
+      .withFailureHandler(console.error)
+      .logActivity({
+        action: 'MATERIALS_RECEIPT_ERROR',
+        moduleType: 'MATERIALS_RECEIPTS',
+        referenceId: selectedProject,
+        details: {
+          error: errorMessage,
+          vendorId: selectedVendorId,
+          amount
+        }
+      });
+  };
+
   const resetForm = () => {
     if (!mountedRef.current) return;
     // Project reset
@@ -124,6 +158,12 @@ const MaterialsReceipt = () => {
     }).format(numValue);
   };
 
+  const validateFileUpload = (file) => {
+    const maxSize = FILE_UPLOAD_CONFIG.maxSize;
+    const allowedTypes = FILE_UPLOAD_CONFIG.allowedTypes;
+    // Add validation
+  };
+
   // ============ EVENT HANDLERS ============
   const handleCurrencyInput = (value, setValue) => {
     let numbersOnly = value.replace(/[^0-9.]/g, '');
@@ -146,21 +186,21 @@ const MaterialsReceipt = () => {
   const handleFileChange = e => {
     const file = e.target.files[0];
     if (file) {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
-      const maxSize = 10 * 1024 * 1024; // 10MB
+      const allowedTypes = FILE_UPLOAD_CONFIG.allowedTypes;
+      const maxSize = FILE_UPLOAD_CONFIG.maxSize;
       
       console.log('Selected file:', file);
       console.log('File type:', file.type);
       console.log('File size:', file.size);
       
       if (!allowedTypes.includes(file.type)) {
-        showMessage('Please upload an image file (JPEG, PNG, GIF) or PDF', 'error');
+        showMessage(FILE_UPLOAD_CONFIG.errorMessages.invalidType, 'error');
         fileInputRef.current.value = '';
         return;
       }
       
       if (file.size > maxSize) {
-        showMessage('File is too large. Maximum size is 10MB.', 'error');
+        showMessage(FILE_UPLOAD_CONFIG.errorMessages.tooLarge, 'error');
         fileInputRef.current.value = '';
         return;
       }
@@ -199,61 +239,38 @@ const MaterialsReceipt = () => {
 
   const uploadReceiptFile = async (file) => {
     console.log('=== Starting File Upload ===');
-    console.log('File:', file);
-    console.log('Selected Project:', selectedProject);
-    console.log('Projects:', projects);
-    console.log('Selected Project Folder ID:', selectedProjectFolderId);
-
-    // Log full details of the selected project
-    const selectedProj = projects.find(proj => proj.id === selectedProject);
-    console.log('Selected Project Details:', selectedProj);
-
+    
     return new Promise((resolve, reject) => {
       if (!selectedProjectFolderId) {
-        console.error('ERROR: No project folder selected');
-        console.error('Current Projects:', projects);
-        console.error('Selected Project:', selectedProject);
-        console.error('Selected Project Details:', selectedProj);
-        
         reject(new Error('No Materials folder ID associated with this project'));
         return;
       }
       
       const reader = new FileReader();
       reader.onloadend = async () => {
-        console.log('FileReader onloadend triggered');
-        console.log('Base64 data length:', reader.result.length);
-        console.log('Folder ID being sent:', selectedProjectFolderId);
-
         try {
           const fileInfo = await new Promise((uploadResolve, uploadReject) => {
-            console.log('Calling uploadReceiptFile in Apps Script');
             google.script.run
               .withSuccessHandler((result) => {
-                console.log('Upload success:', result);
                 if (result.success) {
                   uploadResolve(result);
                 } else {
-                  console.error('Upload failed:', result.error);
                   uploadReject(new Error(result.error || 'Upload failed'));
                 }
               })
-              .withFailureHandler((error) => {
-                console.error('Upload failed:', error);
-                uploadReject(error);
-              })
-              .uploadReceiptFile(reader.result, selectedProjectFolderId, 'MATREC');
+              .withFailureHandler(uploadReject)
+              .uploadReceiptFile({
+                base64Data: reader.result,
+                folderId: selectedProjectFolderId,
+                fileType: file.type
+              });
           });
           resolve(fileInfo);
         } catch (error) {
-          console.error('Error in file upload:', error);
           reject(error);
         }
       };
-      reader.onerror = (error) => {
-        console.error('FileReader error:', error);
-        reject(error);
-      };
+      reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   };
@@ -369,7 +386,8 @@ const MaterialsReceipt = () => {
           vendorName: finalVendorName,
           amount: parseFloat(amount),
           receiptDocURL: fileInfo?.data?.url || '',
-          forUserEmail
+          forUserEmail: forUserEmail || undefined,
+          submittingUser: undefined // Will be set by backend
         };
 
         console.log('== Final payload for submitMaterialsReceipt ==');
@@ -541,4 +559,6 @@ const MaterialsReceipt = () => {
     )
   );
 };
+
+window.MaterialsReceipt = MaterialsReceipt;
 </script>

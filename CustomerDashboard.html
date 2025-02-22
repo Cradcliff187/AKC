@@ -1,11 +1,41 @@
 <script>
-const CustomerDashboard = ({ analytics, onSelectCustomer }) => {
+const CustomerDashboard = ({ customer, analytics, onSelectCustomer }) => {
+  const VIEWS = configuration.settings.CUSTOMER_MODULE.VIEWS;
+  const [currentView, setCurrentView] = React.useState(VIEWS.DASHBOARD);
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
   };
+
+  // Add new view renderers
+  const renderView = () => {
+    switch(currentView) {
+      case VIEWS.DASHBOARD:
+        return React.createElement(CustomerOverview, { customer });
+      case VIEWS.CONTACTS:
+        return React.createElement(CustomerContacts, { customer });
+      case VIEWS.DOCUMENTS:
+        return React.createElement(CustomerDocuments, { customer });
+      case VIEWS.FINANCIALS:
+        return React.createElement(CustomerFinancials, { customer });
+      default:
+        return null;
+    }
+  };
+
+  // Update navigation items
+  const navigationItems = [
+    { id: VIEWS.DASHBOARD, label: 'Dashboard', icon: 'home' },
+    { id: VIEWS.DETAILS, label: 'Details', icon: 'user' },
+    { id: VIEWS.ESTIMATES, label: 'Estimates', icon: 'file-text' },
+    { id: VIEWS.PROJECTS, label: 'Projects', icon: 'briefcase' },
+    { id: VIEWS.DOCUMENTS, label: 'Documents', icon: 'folder' },
+    { id: VIEWS.CONTACTS, label: 'Contacts', icon: 'users' },
+    { id: VIEWS.FINANCIALS, label: 'Financials', icon: 'dollar-sign' }
+  ];
 
   return React.createElement('div', { className: 'space-y-6' },
     // Summary Cards

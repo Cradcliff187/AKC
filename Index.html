@@ -3,171 +3,247 @@
 <head>
   <base target="_top">
   <meta charset="UTF-8">
-  <title>AKC LLC Management</title>
-  <!-- Load Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Load React (v17) -->
-  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AKC Project Management</title>
 
-  <!-- Lower-level components first -->
+  <!-- Error handling for external resources -->
+  <script>
+    window.addEventListener('error', function(e) {
+      if (e.target.tagName === 'SCRIPT') {
+        console.error('Failed to load:', e.target.src);
+        document.getElementById('root').innerHTML = 'Failed to load required resources. Please refresh.';
+      }
+    }, true);
+  </script>
+
+  <!-- CDN Resources -->
+  <script src="https://unpkg.com/react@17/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Load Config first -->
   <?!= include('Constants'); ?>
+  <?!= include('Styles'); ?>
+
+  <!-- Load Components in dependency order -->
+  <?!= include('AddressValidator'); ?>
+  <?!= include('AddressInput'); ?>
+  <?!= include('CustomerContacts'); ?>
+  <?!= include('CustomerDocuments'); ?>
+  <?!= include('CustomerFinancials'); ?>
   <?!= include('TimeLogger'); ?>
   <?!= include('MaterialsReceipt'); ?>
   <?!= include('SubInvoice'); ?>
   <?!= include('EstimateCreator'); ?>
-
+  <?!= include('CustomerEstimatesManager'); ?>
   <?!= include('CustomerDetails'); ?>
   <?!= include('CustomerList'); ?>
   <?!= include('CustomerDashboard'); ?>
-  <?!= include('CustomerEstimatesManager'); ?>
   <?!= include('CustomerProjects'); ?>
-
-  <!-- Finally, the parent that references all of the above -->
   <?!= include('CustomerManagement'); ?>
-  <?!= include('CustomerManagementTest'); ?>
 </head>
 <body>
-  <div class="min-h-screen bg-gray-100">
-    <div class="container mx-auto p-4">
-      <!-- Header -->
-      <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">AKC LLC Management</h1>
-        <p class="text-gray-600">Select an option to get started</p>
-      </div>
-
-      <!-- Main Content Area -->
-      <div id="mainContent">
-        <div id="menuScreen" class="max-w-2xl mx-auto">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button 
-              id="timeLoggerBtn" 
-              class="p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-center"
-            >
-              <div class="text-2xl text-blue-500 mb-2">⏱️</div>
-              <h2 class="text-xl font-semibold text-gray-800 mb-2">Log Time</h2>
-              <p class="text-gray-600 text-sm">Record time spent on projects</p>
-            </button>
-
-            <button 
-              id="materialsReceiptBtn" 
-              class="p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-center"
-            >
-              <div class="text-2xl text-green-500 mb-2">📝</div>
-              <h2 class="text-xl font-semibold text-gray-800 mb-2">Materials Receipt</h2>
-              <p class="text-gray-600 text-sm">Submit materials and receipts</p>
-            </button>
-
-            <button 
-              id="subInvoiceBtn" 
-              class="p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-center"
-            >
-              <div class="text-2xl text-purple-500 mb-2">🔧</div>
-              <h2 class="text-xl font-semibold text-gray-800 mb-2">Sub-Invoice</h2>
-              <p class="text-gray-600 text-sm">Submit subcontractor invoices</p>
-            </button>
-
-            <button 
-              id="estimateCreatorBtn" 
-              class="p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-center"
-            >
-              <div class="text-2xl text-orange-500 mb-2">📄</div>
-              <h2 class="text-xl font-semibold text-gray-800 mb-2">Create Estimate</h2>
-              <p class="text-gray-600 text-sm">Generate new project estimates</p>
-            </button>
-
-            <button 
-              id="customerManagementBtn" 
-              class="p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-center"
-            >
-              <div class="text-2xl text-teal-500 mb-2">👥</div>
-              <h2 class="text-xl font-semibold text-gray-800 mb-2">Customers</h2>
-              <p class="text-gray-600 text-sm">Manage customer information</p>
-            </button>           
-          </div>
-        </div>
-
-        <div id="root" class="hidden"></div>
-      </div>
-
-      <!-- Back Button (Initially Hidden) -->
-      <div id="backBtn" class="mt-4 text-center hidden">
-        <button class="text-blue-600 hover:text-blue-800">
-          ← Back to Menu
-        </button>
-      </div>
+  <div id="root" class="min-h-screen bg-gray-100">
+    <div class="flex items-center justify-center min-h-screen">
+      <div class="loading-spinner"></div>
     </div>
   </div>
 
   <script>
+    const Header = () => {
+      return React.createElement('div', {
+        className: 'text-center mb-8'
+      }, [
+        React.createElement('h1', {
+          className: 'text-3xl font-bold text-gray-800 mb-2',
+          key: 'title'
+        }, 'AKC LLC Management'),
+        React.createElement('p', {
+          className: 'text-gray-600',
+          key: 'subtitle'
+        }, 'Select an option to get started')
+      ]);
+    };
+
+    const MainLayout = ({ children }) => {
+      return React.createElement('div', {
+        className: 'min-h-screen bg-gray-100'
+      }, 
+        React.createElement('div', {
+          className: 'container mx-auto p-4'
+        },
+          React.createElement(Header),
+          children,
+          React.createElement(BackButton)
+        )
+      );
+    };
+
+    const NavigationGrid = ({ items, onSelect }) => {
+      return React.createElement('div', {
+        className: 'max-w-2xl mx-auto'
+      },
+        React.createElement('div', {
+          className: 'grid grid-cols-1 md:grid-cols-2 gap-4'
+        },
+          items.map(item => 
+            React.createElement('button', {
+              key: item.id,
+              className: `p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-center`,
+              onClick: () => onSelect(item.id)
+            }, [
+              React.createElement('div', {
+                key: 'icon',
+                className: `text-2xl text-${item.color}-500 mb-2`
+              }, item.icon),
+              React.createElement('h2', {
+                key: 'title',
+                className: 'text-xl font-semibold text-gray-800 mb-2'
+              }, item.title),
+              React.createElement('p', {
+                key: 'description',
+                className: 'text-gray-600 text-sm'
+              }, item.description)
+            ])
+          )
+        )
+      );
+    };
+
+    function StatusBadge({ status, config }) {
+      var statusConfig = config || window.CONSTANTS.STATUS_DISPLAY[status] || {
+        color: 'gray',
+        label: status
+      };
+
+      return React.createElement('span', {
+        className: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-' + 
+                   statusConfig.color + '-100 text-' + statusConfig.color + '-800'
+      }, statusConfig.label);
+    }
+
     // Main App to handle navigation
     const App = () => {
       const [currentPage, setCurrentPage] = React.useState(null);
+      const [systemConfig, setSystemConfig] = React.useState(null);
 
       React.useEffect(() => {
-        const timeLoggerBtn = document.getElementById('timeLoggerBtn');
-        const materialsReceiptBtn = document.getElementById('materialsReceiptBtn');
-        const subInvoiceBtn = document.getElementById('subInvoiceBtn');
-        const estimateCreatorBtn = document.getElementById('estimateCreatorBtn');
-        const backBtn = document.getElementById('backBtn');
-        const menuScreen = document.getElementById('menuScreen');
-        const rootElement = document.getElementById('root');
-
-        const showComponent = (component) => {
-          menuScreen.classList.add('hidden');
-          rootElement.classList.remove('hidden');
-          backBtn.classList.remove('hidden');
-          setCurrentPage(component);
-        };
-
-        const handleBack = () => {
-          menuScreen.classList.remove('hidden');
-          rootElement.classList.add('hidden');
-          backBtn.classList.add('hidden');
-          setCurrentPage(null);
-        };
-
-        const handleTimeLogger = () => showComponent('timeLogger');
-        const handleMaterialsReceipt = () => showComponent('materialsReceipt');
-        const handleSubInvoice = () => showComponent('subInvoice');
-        const handleEstimateCreator = () => showComponent('estimateCreator');
-        const handleCustomerManagement = () => showComponent('customerManagement');
-
-        timeLoggerBtn.addEventListener('click', handleTimeLogger);
-        materialsReceiptBtn.addEventListener('click', handleMaterialsReceipt);
-        subInvoiceBtn.addEventListener('click', handleSubInvoice);
-        estimateCreatorBtn.addEventListener('click', handleEstimateCreator);
-        backBtn.addEventListener('click', handleBack);
-        customerManagementBtn.addEventListener('click', handleCustomerManagement);
-
-        return () => {
-          timeLoggerBtn.removeEventListener('click', handleTimeLogger);
-          materialsReceiptBtn.removeEventListener('click', handleMaterialsReceipt);
-          subInvoiceBtn.removeEventListener('click', handleSubInvoice);
-          estimateCreatorBtn.removeEventListener('click', handleEstimateCreator);
-          backBtn.removeEventListener('click', handleBack);
-        };
+        // Load system configuration
+        google.script.run
+          .withSuccessHandler(config => {
+            setSystemConfig(config);
+          })
+          .withFailureHandler(error => {
+            console.error('Failed to load system config:', error);
+          })
+          .getSystemConstants();
       }, []);
 
-      if (!currentPage) return null;
+      const navigationItems = [
+        {
+          id: 'timeLogger',
+          icon: '⏱️',
+          title: 'Log Time',
+          description: 'Record time spent on projects',
+          color: 'blue'
+        },
+        {
+          id: 'materialsReceipt',
+          icon: '📝',
+          title: 'Materials Receipt',
+          description: 'Submit materials and receipts',
+          color: 'green'
+        },
+        {
+          id: 'subInvoice',
+          icon: '🔧',
+          title: 'Sub-Invoice',
+          description: 'Submit subcontractor invoices',
+          color: 'purple'
+        },
+        {
+          id: 'estimateCreator',
+          icon: '📄',
+          title: 'Create Estimate',
+          description: 'Generate new project estimates',
+          color: 'orange'
+        },
+        {
+          id: 'customerManagement',
+          icon: '👥',
+          title: 'Customers',
+          description: 'Manage customer information',
+          color: 'teal'
+        }
+      ];
 
-      if (currentPage === 'timeLogger') {
-        return React.createElement(TimeLogger);
-      } else if (currentPage === 'materialsReceipt') {
-        return React.createElement(MaterialsReceipt);
-      } else if (currentPage === 'subInvoice') {
-        return React.createElement(SubInvoice);
-      } else if (currentPage === 'estimateCreator') {
-        return React.createElement(EstimateCreator);
-      } else if (currentPage === 'customerManagement') {
-        return React.createElement(CustomerManagement);
-      }
+      const renderContent = () => {
+        if (!currentPage) {
+          return React.createElement(NavigationGrid, {
+            items: navigationItems,
+            onSelect: setCurrentPage
+          });
+        }
+
+        const components = {
+          timeLogger: TimeLogger,
+          materialsReceipt: MaterialsReceipt,
+          subInvoice: SubInvoice,
+          estimateCreator: EstimateCreator,
+          customerManagement: CustomerManagement
+        };
+
+        return React.createElement(components[currentPage], {
+          config: systemConfig,
+          onBack: () => setCurrentPage(null)
+        });
+      };
+
+      return React.createElement(MainLayout, null, renderContent());
     };
 
-    // Initialize the app on DOMContentLoaded
-    document.addEventListener('DOMContentLoaded', () => {
-      const root = document.getElementById('root');
-      ReactDOM.render(React.createElement(App), root);
+    // Initialize app with constants check
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        // Verify React loaded
+        if (!window.React || !window.ReactDOM) {
+          throw new Error('React not loaded');
+        }
+
+        // Wait for constants to load
+        window.waitForConstants(function() {
+          var root = document.getElementById('root');
+          
+          // Create error boundary wrapper
+          function ErrorBoundary(props) {
+            return React.createElement(
+              'div',
+              { 
+                className: 'error-boundary',
+                onError: function(error) {
+                  console.error('Application error:', error);
+                  return React.createElement('div', {
+                    className: 'error-message'
+                  }, 'An error occurred. Please refresh the page.');
+                }
+              },
+              props.children
+            );
+          }
+
+          // Render app with error boundary
+          ReactDOM.render(
+            React.createElement(ErrorBoundary, null,
+              React.createElement(CustomerManagement)
+            ),
+            root
+          );
+        });
+      } catch (error) {
+        console.error('Failed to initialize:', error);
+        document.getElementById('root').innerHTML = 
+          '<div class="text-center text-red-600 p-4">Failed to initialize application</div>';
+      }
     });
   </script>
 </body>

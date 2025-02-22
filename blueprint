@@ -1,0 +1,2459 @@
+{
+  "database": {
+    "sheets": {
+      "PROJECTS": {
+        "name": "Projects",
+        "columns": [
+          {
+            "name": "ProjectID",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "CustomerID",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "ProjectName",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          },
+          {
+            "name": "FolderID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "JobID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModified",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModifiedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "EstimatesFolderID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "MaterialsFolderID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubInvoicesFolderID",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {
+          "hasMany": [
+            "ESTIMATES",
+            "TIME_LOGS",
+            "MATERIALS_RECEIPTS",
+            "SUBINVOICES"
+          ],
+          "belongsTo": [
+            "CUSTOMERS"
+          ]
+        },
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "TIME_LOGS": {
+        "name": "TimeLogs",
+        "columns": [
+          {
+            "name": "TimeLogID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ProjectID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "DateWorked",
+            "type": "date",
+            "isRequired": false
+          },
+          {
+            "name": "StartTime",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "EndTime",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "TotalHours",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubmittingUser",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ForUserEmail",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {
+          "belongsTo": [
+            "PROJECTS"
+          ]
+        },
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "MATERIALS_RECEIPTS": {
+        "name": "MaterialsReceipts",
+        "columns": [
+          {
+            "name": "ReceiptID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ProjectID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "VendorID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "VendorName",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Amount",
+            "type": "number",
+            "isRequired": false
+          },
+          {
+            "name": "ReceiptDocURL",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubmittingUser",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ForUserEmail",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {
+          "belongsTo": [
+            "PROJECTS",
+            "VENDORS"
+          ]
+        },
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "SUBCONTRACTORS": {
+        "name": "Subcontractors",
+        "columns": [
+          {
+            "name": "SubID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubName",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Address",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "City",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "State",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Zip",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ContactEmail",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Phone",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "SUBINVOICES": {
+        "name": "Subinvoices",
+        "columns": [
+          {
+            "name": "SubInvoiceID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ProjectID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ProjectName",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubName",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "InvoiceAmount",
+            "type": "number",
+            "isRequired": false
+          },
+          {
+            "name": "InvoiceDocURL",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SubmittingUser",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {
+          "belongsTo": [
+            "PROJECTS",
+            "SUBCONTRACTORS"
+          ]
+        },
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "ESTIMATES": {
+        "name": "Estimates",
+        "columns": [
+          {
+            "name": "EstimateID",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "ProjectID",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "DateCreated",
+            "type": "date",
+            "isRequired": false
+          },
+          {
+            "name": "CustomerID",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "EstimatedAmount",
+            "type": "number",
+            "isRequired": false
+          },
+          {
+            "name": "ContingencyAmount",
+            "type": "number",
+            "isRequired": false
+          },
+          {
+            "name": "ScopeItemsJSON",
+            "type": "json",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "DocUrl",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "DocId",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          },
+          {
+            "name": "SentDate",
+            "type": "date",
+            "isRequired": false
+          },
+          {
+            "name": "IsActive",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "PreviousVersionId",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "VersionNumber",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ApprovedDate",
+            "type": "date",
+            "isRequired": false
+          },
+          {
+            "name": "ApprovedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "UpdatedAmount",
+            "type": "number",
+            "isRequired": false
+          },
+          {
+            "name": "ActiveEstimateId",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CurrentApprovedAmount",
+            "type": "number",
+            "isRequired": false
+          }
+        ],
+        "relationships": {
+          "belongsTo": [
+            "PROJECTS",
+            "CUSTOMERS"
+          ]
+        },
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "CUSTOMERS": {
+        "name": "Customers",
+        "columns": [
+          {
+            "name": "CustomerID",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "CustomerName",
+            "type": "string",
+            "isRequired": true
+          },
+          {
+            "name": "Address",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "City",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "State",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Zip",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ContactEmail",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Phone",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "ACTIVITY_LOG": {
+        "name": "ActivityLog",
+        "columns": [
+          {
+            "name": "LogID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Timestamp",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Action",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "UserEmail",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ModuleType",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "ReferenceID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "DetailsJSON",
+            "type": "json",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          },
+          {
+            "name": "PreviousStatus",
+            "type": "enum",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "VENDORS": {
+        "name": "Vendors",
+        "columns": [
+          {
+            "name": "VendorID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "VendorName",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "CUSTOMER_CONTACTS": {
+        "name": "CustomerContacts",
+        "columns": [
+          {
+            "name": "ContactID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CustomerID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Role",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Name",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Email",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Phone",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Title",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "IsPrimary",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModified",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModifiedBy",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "CUSTOMER_DOCUMENTS": {
+        "name": "CustomerDocuments",
+        "columns": [
+          {
+            "name": "DocumentID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CustomerID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Type",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Name",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "URL",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Description",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Version",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModified",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModifiedBy",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      },
+      "CUSTOMER_COMMUNICATIONS": {
+        "name": "CustomerComms",
+        "columns": [
+          {
+            "name": "CommunicationID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CustomerID",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Type",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Subject",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Content",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "SentTo",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Status",
+            "type": "enum",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedOn",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "CreatedBy",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModified",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "LastModifiedBy",
+            "type": "string",
+            "isRequired": false
+          }
+        ],
+        "relationships": {},
+        "accessPatterns": {
+          "sheets": {
+            "read": {
+              "pattern": "getSheetData",
+              "implementation": "sheet.getDataRange().getValues()",
+              "usage": [
+                "headers + rows pattern",
+                "column mapping"
+              ]
+            },
+            "write": {
+              "pattern": "appendRow",
+              "implementation": "sheet.appendRow(rowData)",
+              "validation": "validateRequiredFields"
+            },
+            "update": {
+              "pattern": "getRange().setValue()",
+              "implementation": "direct cell updates",
+              "validation": "validateStatusTransition"
+            }
+          },
+          "drive": {
+            "folders": {
+              "pattern": "hierarchical",
+              "implementation": "DriveApp.getFolderById()",
+              "permissions": "setWorkspacePermissions"
+            },
+            "files": {
+              "pattern": "template-based",
+              "implementation": "templateDoc.makeCopy()",
+              "modifications": "body.replaceText()"
+            }
+          }
+        }
+      }
+    },
+    "dataModels": {},
+    "accessPatterns": {
+      "sheets": {
+        "read": {
+          "pattern": "getSheetData",
+          "implementation": "sheet.getDataRange().getValues()",
+          "usage": [
+            "headers + rows pattern",
+            "column mapping"
+          ]
+        },
+        "write": {
+          "pattern": "appendRow",
+          "implementation": "sheet.appendRow(rowData)",
+          "validation": "validateRequiredFields"
+        },
+        "update": {
+          "pattern": "getRange().setValue()",
+          "implementation": "direct cell updates",
+          "validation": "validateStatusTransition"
+        }
+      },
+      "drive": {
+        "folders": {
+          "pattern": "hierarchical",
+          "implementation": "DriveApp.getFolderById()",
+          "permissions": "setWorkspacePermissions"
+        },
+        "files": {
+          "pattern": "template-based",
+          "implementation": "templateDoc.makeCopy()",
+          "modifications": "body.replaceText()"
+        }
+      }
+    }
+  },
+  "presentation": {
+    "forms": {
+      "estimate": {
+        "sections": [
+          {
+            "title": "Customer Information",
+            "fields": [
+              {
+                "name": "customerId",
+                "type": "select",
+                "label": "Customer",
+                "required": true,
+                "source": "customers",
+                "displayFields": [
+                  "name",
+                  "customerId"
+                ],
+                "searchable": true,
+                "createNew": {
+                  "allowed": true,
+                  "workflow": "customerCreation"
+                }
+              },
+              {
+                "name": "projectName",
+                "type": "text",
+                "label": "Project Name",
+                "required": true,
+                "maxLength": 100,
+                "validation": "validateProjectName"
+              }
+            ]
+          },
+          {
+            "title": "Scope of Work",
+            "fields": [
+              {
+                "name": "scopeOfWork",
+                "type": "textarea",
+                "label": "Scope of Work",
+                "required": true,
+                "rows": 5,
+                "richText": false
+              }
+            ]
+          },
+          {
+            "title": "Line Items",
+            "type": "dynamicTable",
+            "fields": [
+              {
+                "name": "itemService",
+                "type": "text",
+                "label": "Item/Service",
+                "required": true
+              },
+              {
+                "name": "description",
+                "type": "text",
+                "label": "Description",
+                "required": true
+              },
+              {
+                "name": "qtyHours",
+                "type": "number",
+                "label": "Qty/Hours",
+                "required": true,
+                "min": 0,
+                "step": 0.25
+              },
+              {
+                "name": "rate",
+                "type": "currency",
+                "label": "Rate",
+                "required": true,
+                "min": 0
+              },
+              {
+                "name": "amount",
+                "type": "currency",
+                "label": "Amount",
+                "calculated": true,
+                "formula": "qtyHours * rate"
+              }
+            ],
+            "actions": [
+              "add",
+              "remove"
+            ],
+            "summary": {
+              "total": {
+                "label": "Total Amount",
+                "type": "currency",
+                "formula": "sum(amount)"
+              }
+            }
+          }
+        ],
+        "actions": [
+          {
+            "type": "submit",
+            "label": "Generate Estimate",
+            "workflow": "estimateCreation",
+            "status": "DRAFT",
+            "requiresValidation": true
+          },
+          {
+            "type": "submit",
+            "label": "Save & Submit for Review",
+            "workflow": "estimateCreation",
+            "status": "PENDING",
+            "requiresValidation": true
+          }
+        ],
+        "validation": [
+          "validateRequiredFields",
+          "validateEstimateAmount"
+        ]
+      }
+    },
+    "lists": {
+      "customers": {
+        "defaultView": "table",
+        "views": {
+          "table": {
+            "columns": [
+              {
+                "field": "customerId",
+                "header": "Customer ID",
+                "sortable": true,
+                "width": 120
+              },
+              {
+                "field": "name",
+                "header": "Name",
+                "sortable": true,
+                "searchable": true,
+                "primary": true
+              },
+              {
+                "field": "status",
+                "header": "Status",
+                "type": "badge",
+                "options": {
+                  "ACTIVE": "ACTIVE",
+                  "INACTIVE": "INACTIVE",
+                  "PENDING": "PENDING",
+                  "ARCHIVED": "ARCHIVED"
+                },
+                "colors": {
+                  "ACTIVE": "green",
+                  "INACTIVE": "gray",
+                  "PENDING": "yellow"
+                }
+              },
+              {
+                "field": "metrics.totalRevenue",
+                "header": "Total Revenue",
+                "type": "currency",
+                "sortable": true,
+                "align": "right"
+              }
+            ],
+            "actions": [
+              {
+                "label": "View Details",
+                "type": "navigate",
+                "destination": "customerDetails"
+              },
+              {
+                "label": "View Estimates",
+                "type": "navigate",
+                "destination": "customerEstimates"
+              }
+            ],
+            "filters": [
+              {
+                "field": "status",
+                "type": "select",
+                "options": {
+                  "ACTIVE": "ACTIVE",
+                  "INACTIVE": "INACTIVE",
+                  "PENDING": "PENDING",
+                  "ARCHIVED": "ARCHIVED"
+                }
+              },
+              {
+                "field": "metrics.totalRevenue",
+                "type": "range",
+                "dataType": "currency"
+              }
+            ],
+            "rowActions": [
+              "edit",
+              "delete"
+            ]
+          },
+          "cards": {
+            "layout": "grid",
+            "fields": [
+              "name",
+              "status",
+              "metrics.activeProjects",
+              "metrics.totalRevenue"
+            ]
+          }
+        }
+      }
+    },
+    "formatters": {
+      "currency": {
+        "type": "number",
+        "style": "currency",
+        "currency": "USD",
+        "minimumFractionDigits": 2
+      },
+      "phone": {
+        "type": "string",
+        "format": "(###) ###-####",
+        "validation": {}
+      },
+      "date": {
+        "type": "date",
+        "format": "MM/dd/yyyy",
+        "picker": true
+      }
+    },
+    "interactions": {
+      "fileUpload": {
+        "types": [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "application/pdf"
+        ],
+        "maxSize": 10485760,
+        "multiple": false,
+        "preview": true
+      },
+      "modals": {
+        "estimateEmail": {
+          "title": "Send Estimate",
+          "fields": [
+            {
+              "name": "recipientEmail",
+              "type": "email",
+              "required": true,
+              "defaultValue": "customer.email"
+            },
+            {
+              "name": "subject",
+              "type": "text",
+              "required": true,
+              "template": "Estimate {estimateId} from AKC LLC"
+            },
+            {
+              "name": "notes",
+              "type": "textarea",
+              "required": false
+            }
+          ],
+          "actions": [
+            "send",
+            "cancel"
+          ]
+        }
+      }
+    },
+    "navigation": {
+      "primary": [
+        {
+          "label": "Dashboard",
+          "route": "/",
+          "icon": "home"
+        },
+        {
+          "label": "Customers",
+          "route": "/customers",
+          "icon": "users"
+        },
+        {
+          "label": "Estimates",
+          "route": "/estimates",
+          "icon": "file-text"
+        }
+      ],
+      "workflows": {
+        "estimateCreation": {
+          "steps": [
+            "customerSelection",
+            "projectDetails",
+            "estimateDetails",
+            "review"
+          ],
+          "allowBack": true,
+          "validateStep": true
+        }
+      }
+    },
+    "permissions": {
+      "views": {
+        "customers": {
+          "read": [
+            "all"
+          ],
+          "create": [
+            "admin",
+            "manager"
+          ],
+          "update": [
+            "admin",
+            "manager"
+          ],
+          "delete": [
+            "admin"
+          ]
+        },
+        "estimates": {
+          "read": [
+            "all"
+          ],
+          "create": [
+            "admin",
+            "manager",
+            "estimator"
+          ],
+          "approve": [
+            "admin",
+            "manager"
+          ]
+        }
+      }
+    }
+  },
+  "apis": {
+    "endpoints": {
+      "project": {
+        "getProjects": {
+          "type": "GET",
+          "endpointUrl": "/api/project",
+          "parameters": {},
+          "response": {
+            "type": "array",
+            "items": {
+              "projectId": "string",
+              "name": "string",
+              "status": "enum(PROJECT_STATUSES)",
+              "folderId": "string",
+              "customerId": "string"
+            }
+          },
+          "validation": [
+            "validateRequiredFields"
+          ],
+          "workflow": "projectManagement"
+        },
+        "createProject": {
+          "type": "POST",
+          "endpointUrl": "/api/project",
+          "parameters": {
+            "customerId": {
+              "type": "string",
+              "required": true
+            },
+            "projectName": {
+              "type": "string",
+              "required": true
+            },
+            "status": {
+              "type": "enum",
+              "values": "PROJECT_STATUSES"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "projectId": "string",
+              "folderId": "string",
+              "folders": {
+                "main": "string",
+                "estimates": "string",
+                "materials": "string",
+                "subInvoices": "string"
+              }
+            }
+          },
+          "validation": [
+            "validateRequiredFields",
+            "validateCustomerId"
+          ],
+          "workflow": "projectCreation"
+        }
+      },
+      "estimate": {
+        "createAndSaveEstimate": {
+          "type": "POST",
+          "endpointUrl": "/api/estimate",
+          "parameters": {
+            "customerId": {
+              "type": "string",
+              "required": true
+            },
+            "projectName": {
+              "type": "string",
+              "required": true
+            },
+            "scopeOfWork": {
+              "type": "string",
+              "required": true
+            },
+            "tableItems": {
+              "type": "array",
+              "items": {
+                "itemService": "string",
+                "description": "string",
+                "qtyHours": "number",
+                "rate": "number",
+                "amount": "number"
+              }
+            },
+            "totalAmount": {
+              "type": "number",
+              "required": true
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "estimateId": "string",
+              "docUrl": "string",
+              "status": "enum(ESTIMATE_STATUSES)"
+            }
+          },
+          "validation": [
+            "validateRequiredFields",
+            "validateEstimateAmount",
+            "validateCustomerId"
+          ],
+          "workflow": "estimateCreation"
+        }
+      },
+      "timeLogger": {
+        "submitTimeLog": {
+          "type": "POST",
+          "endpointUrl": "/api/timelog",
+          "parameters": {
+            "date": {
+              "type": "string",
+              "required": true
+            },
+            "startTime": {
+              "type": "string",
+              "required": true
+            },
+            "endTime": {
+              "type": "string",
+              "required": true
+            },
+            "projectId": {
+              "type": "string",
+              "required": true
+            },
+            "forUserEmail": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "id": "string",
+              "hours": "number"
+            }
+          },
+          "validation": [
+            "validateRequiredFields",
+            "validateProjectId"
+          ],
+          "workflow": "timeLogging"
+        }
+      },
+      "materialsReceipt": {
+        "submitMaterialsReceipt": {
+          "type": "POST",
+          "endpointUrl": "/api/materialsReceipt",
+          "parameters": {
+            "projectId": {
+              "type": "string",
+              "required": true
+            },
+            "vendorId": {
+              "type": "string",
+              "required": true
+            },
+            "vendorName": {
+              "type": "string",
+              "required": true
+            },
+            "amount": {
+              "type": "number",
+              "required": true
+            },
+            "receiptDocURL": {
+              "type": "string"
+            },
+            "forUserEmail": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "id": "string",
+              "amount": "number",
+              "timestamp": "string"
+            }
+          },
+          "validation": [
+            "validateRequiredFields",
+            "validateVendorId",
+            "validateAmount"
+          ],
+          "workflow": "materialsTracking"
+        }
+      },
+      "subInvoice": {
+        "submitSubInvoice": {
+          "type": "POST",
+          "endpointUrl": "/api/subInvoice",
+          "parameters": {
+            "projectId": {
+              "type": "string",
+              "required": true
+            },
+            "projectName": {
+              "type": "string",
+              "required": true
+            },
+            "subId": {
+              "type": "string",
+              "required": true
+            },
+            "subName": {
+              "type": "string",
+              "required": true
+            },
+            "invoiceAmount": {
+              "type": "number",
+              "required": true
+            },
+            "invoiceDocURL": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "id": "string",
+              "amount": "number"
+            }
+          },
+          "validation": [
+            "validateRequiredFields",
+            "validateAmount"
+          ],
+          "workflow": "subcontractorInvoicing"
+        }
+      },
+      "vendor": {
+        "getVendorsForClient": {
+          "type": "GET",
+          "endpointUrl": "/api/vendor",
+          "parameters": {},
+          "response": {
+            "type": "array",
+            "items": {
+              "vendorId": "string",
+              "vendorName": "string"
+            }
+          },
+          "workflow": "vendorManagement"
+        },
+        "createVendorForClient": {
+          "type": "POST",
+          "endpointUrl": "/api/vendor",
+          "parameters": {
+            "vendorName": {
+              "type": "string",
+              "required": true
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "vendorId": "string",
+              "vendorName": "string",
+              "createdOn": "string",
+              "createdBy": "string",
+              "status": "string"
+            }
+          },
+          "validation": [
+            "validateRequiredFields"
+          ],
+          "workflow": "vendorManagement"
+        }
+      },
+      "subcontractor": {
+        "getSubcontractorsForClient": {
+          "type": "GET",
+          "endpointUrl": "/api/subcontractor",
+          "parameters": {},
+          "response": {
+            "type": "array",
+            "items": {
+              "subId": "string",
+              "subName": "string"
+            }
+          },
+          "workflow": "subcontractorManagement"
+        },
+        "createSubcontractor": {
+          "type": "POST",
+          "endpointUrl": "/api/subcontractor",
+          "parameters": {
+            "subName": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "zip": {
+              "type": "string"
+            },
+            "contactEmail": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "subId": "string",
+              "subName": "string",
+              "address": "string",
+              "city": "string",
+              "state": "string",
+              "zip": "string",
+              "contactEmail": "string",
+              "phone": "string"
+            }
+          },
+          "workflow": "subcontractorManagement"
+        }
+      },
+      "customer": {
+        "getCustomersForClient": {
+          "type": "GET",
+          "endpointUrl": "/api/customer",
+          "parameters": {},
+          "response": {
+            "type": "array",
+            "items": {
+              "customerId": "string",
+              "name": "string",
+              "address": "string",
+              "city": "string",
+              "state": "string",
+              "zip": "string",
+              "email": "string",
+              "phone": "string",
+              "status": "string"
+            }
+          },
+          "workflow": "customerManagement"
+        },
+        "createCustomer": {
+          "type": "POST",
+          "endpointUrl": "/api/customer",
+          "parameters": {
+            "name": {
+              "type": "string",
+              "required": true
+            },
+            "address": {
+              "type": "string",
+              "required": true
+            },
+            "city": {
+              "type": "string",
+              "required": true
+            },
+            "state": {
+              "type": "string",
+              "required": true
+            },
+            "zip": {
+              "type": "string",
+              "required": true
+            },
+            "email": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "customerId": "string",
+              "name": "string",
+              "address": "string",
+              "city": "string",
+              "state": "string",
+              "zip": "string",
+              "email": "string",
+              "phone": "string",
+              "createdOn": "string",
+              "createdBy": "string",
+              "status": "string"
+            }
+          },
+          "validation": [
+            "validateRequiredFields",
+            "validateZipCode",
+            "validatePhoneNumber"
+          ],
+          "workflow": "customerManagement"
+        }
+      },
+      "fileUpload": {
+        "uploadReceiptFile": {
+          "type": "POST",
+          "endpointUrl": "/api/fileUpload",
+          "parameters": {
+            "base64Data": {
+              "type": "string",
+              "required": true
+            },
+            "folderId": {
+              "type": "string",
+              "required": true
+            },
+            "fileType": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "url": "string",
+              "name": "string",
+              "mimeType": "string",
+              "id": "string",
+              "folderId": "string"
+            }
+          },
+          "validation": [
+            "validateBase64Data",
+            "validateFileType"
+          ],
+          "workflow": "fileManagement"
+        }
+      },
+      "statusManagement": {
+        "updateEstimateStatusForClient": {
+          "type": "POST",
+          "endpointUrl": "/api/estimate/status",
+          "parameters": {
+            "estimateId": {
+              "type": "string",
+              "required": true
+            },
+            "newStatus": {
+              "type": "string",
+              "required": true
+            },
+            "currentStatus": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "estimateId": "string",
+              "oldStatus": "string",
+              "newStatus": "string"
+            }
+          },
+          "validation": [
+            "validateStatusTransition"
+          ],
+          "workflow": "estimateStatusManagement"
+        },
+        "updateProjectStatusForClient": {
+          "type": "POST",
+          "endpointUrl": "/api/project/status",
+          "parameters": {
+            "projectId": {
+              "type": "string",
+              "required": true
+            },
+            "newStatus": {
+              "type": "string",
+              "required": true
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "projectId": "string",
+              "oldStatus": "string",
+              "newStatus": "string"
+            }
+          },
+          "validation": [
+            "validateStatusTransition"
+          ],
+          "workflow": "projectStatusManagement"
+        }
+      },
+      "activityLogging": {
+        "logActivity": {
+          "type": "POST",
+          "endpointUrl": "/api/activity",
+          "parameters": {
+            "action": {
+              "type": "string",
+              "required": true
+            },
+            "moduleType": {
+              "type": "string",
+              "required": true
+            },
+            "referenceId": {
+              "type": "string",
+              "required": true
+            },
+            "userEmail": {
+              "type": "string",
+              "required": true
+            },
+            "details": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "logId": "string",
+              "timestamp": "string"
+            }
+          },
+          "workflow": "activityLogging"
+        }
+      }
+    },
+    "parameters": {},
+    "responses": {},
+    "validations": {}
+  },
+  "workflows": {
+    "projectManagement": {
+      "states": {
+        "PENDING": "PENDING",
+        "APPROVED": "APPROVED",
+        "IN_PROGRESS": "IN_PROGRESS",
+        "COMPLETED": "COMPLETED",
+        "CANCELLED": "CANCELLED",
+        "CLOSED": "CLOSED"
+      },
+      "transitions": {
+        "PENDING": {
+          "allowedTo": [
+            "APPROVED",
+            "CANCELLED"
+          ],
+          "validation": [
+            "validateProjectApproval"
+          ],
+          "sideEffects": {
+            "APPROVED": [
+              "createProjectFolders",
+              "setWorkspacePermissions",
+              "notifyTeam"
+            ]
+          },
+          "ui": {
+            "confirmationRequired": true,
+            "requiresComment": false,
+            "buttonStyle": "primary"
+          }
+        },
+        "APPROVED": {
+          "allowedTo": [
+            "IN_PROGRESS",
+            "CANCELLED"
+          ],
+          "validation": [
+            "validateProjectStart"
+          ],
+          "sideEffects": {
+            "IN_PROGRESS": [
+              "enableTimeTracking",
+              "enableMaterialsTracking",
+              "notifyTeam"
+            ]
+          },
+          "ui": {
+            "confirmationRequired": true,
+            "requiresComment": true,
+            "buttonStyle": "success"
+          }
+        },
+        "IN_PROGRESS": {
+          "allowedTo": [
+            "COMPLETED",
+            "CANCELLED"
+          ],
+          "validation": [
+            "validateProjectCompletion"
+          ],
+          "sideEffects": {
+            "COMPLETED": [
+              "finalizeAllEstimates",
+              "closeAllTimeEntries",
+              "generateFinalReport"
+            ]
+          },
+          "ui": {
+            "confirmationRequired": true,
+            "requiresComment": true,
+            "buttonStyle": "warning"
+          }
+        }
+      },
+      "hooks": {
+        "beforeTransition": [
+          "logActivity",
+          "validatePermissions"
+        ],
+        "afterTransition": [
+          "updateProjectStatus",
+          "notifyCustomer"
+        ],
+        "onError": [
+          "revertStatus",
+          "notifyAdmin"
+        ]
+      },
+      "statusDisplay": {
+        "PENDING": {
+          "color": "yellow",
+          "icon": "clock"
+        },
+        "APPROVED": {
+          "color": "green",
+          "icon": "check"
+        },
+        "IN_PROGRESS": {
+          "color": "blue",
+          "icon": "play"
+        },
+        "COMPLETED": {
+          "color": "purple",
+          "icon": "flag"
+        },
+        "CANCELLED": {
+          "color": "red",
+          "icon": "x"
+        },
+        "CLOSED": {
+          "color": "gray",
+          "icon": "archive"
+        }
+      },
+      "moduleAccess": {
+        "APPROVED": [
+          "estimates",
+          "documents"
+        ],
+        "IN_PROGRESS": [
+          "estimates",
+          "documents",
+          "timeTracking",
+          "materials"
+        ],
+        "COMPLETED": [
+          "documents",
+          "reports"
+        ]
+      }
+    },
+    "estimateManagement": {
+      "states": {
+        "DRAFT": "DRAFT",
+        "PENDING": "PENDING",
+        "APPROVED": "APPROVED",
+        "REJECTED": "REJECTED",
+        "COMPLETED": "COMPLETED",
+        "CANCELLED": "CANCELLED",
+        "CLOSED": "CLOSED"
+      },
+      "transitions": {
+        "DRAFT": [
+          "PENDING",
+          "CANCELLED"
+        ],
+        "PENDING": [
+          "APPROVED",
+          "REJECTED",
+          "CANCELLED"
+        ],
+        "APPROVED": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "REJECTED": [
+          "DRAFT",
+          "CANCELLED"
+        ],
+        "COMPLETED": [
+          "CLOSED"
+        ],
+        "CANCELLED": [],
+        "CLOSED": []
+      },
+      "validations": [
+        "validateStatusTransition"
+      ],
+      "hooks": {
+        "beforeTransition": [
+          "logActivity"
+        ],
+        "afterTransition": [
+          "updateEstimateStatus",
+          "syncProjectStatus"
+        ]
+      },
+      "statusDisplay": {
+        "DRAFT": {
+          "color": "gray",
+          "icon": "edit"
+        },
+        "PENDING": {
+          "color": "yellow",
+          "icon": "clock"
+        },
+        "APPROVED": {
+          "color": "green",
+          "icon": "check"
+        },
+        "REJECTED": {
+          "color": "red",
+          "icon": "x"
+        },
+        "CANCELLED": {
+          "color": "gray",
+          "icon": "ban"
+        }
+      }
+    },
+    "customerManagement": {
+      "states": {
+        "ACTIVE": "ACTIVE",
+        "INACTIVE": "INACTIVE",
+        "PENDING": "PENDING",
+        "ARCHIVED": "ARCHIVED"
+      },
+      "transitions": {
+        "PENDING": [
+          "ACTIVE",
+          "INACTIVE"
+        ],
+        "ACTIVE": [
+          "INACTIVE",
+          "ARCHIVED"
+        ],
+        "INACTIVE": [
+          "ACTIVE",
+          "ARCHIVED"
+        ],
+        "ARCHIVED": [
+          "ACTIVE"
+        ]
+      },
+      "validations": [
+        "validateStatusTransition"
+      ],
+      "hooks": {
+        "beforeTransition": [
+          "logActivity"
+        ],
+        "afterTransition": [
+          "updateCustomerStatus"
+        ]
+      },
+      "statusDisplay": {
+        "PENDING": {
+          "color": "yellow",
+          "icon": "clock"
+        },
+        "ACTIVE": {
+          "color": "green",
+          "icon": "check"
+        },
+        "INACTIVE": {
+          "color": "red",
+          "icon": "x"
+        },
+        "ARCHIVED": {
+          "color": "gray",
+          "icon": "archive"
+        }
+      }
+    }
+  },
+  "configuration": {
+    "constants": {
+      "PROJECT_STATUSES": {
+        "PENDING": "PENDING",
+        "APPROVED": "APPROVED",
+        "IN_PROGRESS": "IN_PROGRESS",
+        "COMPLETED": "COMPLETED",
+        "CANCELLED": "CANCELLED",
+        "CLOSED": "CLOSED"
+      },
+      "ESTIMATE_STATUSES": {
+        "DRAFT": "DRAFT",
+        "PENDING": "PENDING",
+        "APPROVED": "APPROVED",
+        "REJECTED": "REJECTED",
+        "COMPLETED": "COMPLETED",
+        "CANCELLED": "CANCELLED",
+        "CLOSED": "CLOSED"
+      },
+      "CUSTOMER_STATUSES": {
+        "ACTIVE": "ACTIVE",
+        "INACTIVE": "INACTIVE",
+        "PENDING": "PENDING",
+        "ARCHIVED": "ARCHIVED"
+      },
+      "DOCUMENT_STATUSES": {
+        "DRAFT": "DRAFT",
+        "ACTIVE": "ACTIVE",
+        "ARCHIVED": "ARCHIVED",
+        "EXPIRED": "EXPIRED"
+      },
+      "COMMUNICATION_STATUSES": {
+        "DRAFT": "DRAFT",
+        "SENT": "SENT",
+        "DELIVERED": "DELIVERED",
+        "READ": "READ",
+        "REPLIED": "REPLIED",
+        "FAILED": "FAILED"
+      }
+    },
+    "settings": {
+      "SPREADSHEET_ID": "1eSwZwz5uPGPVyHkXAt8TFQuS4fLAOqeX5b-PvhK2Ghg",
+      "SHEETS": {
+        "PROJECTS": "Projects",
+        "TIME_LOGS": "TimeLogs",
+        "MATERIALS_RECEIPTS": "MaterialsReceipts",
+        "SUBCONTRACTORS": "Subcontractors",
+        "SUBINVOICES": "Subinvoices",
+        "ESTIMATES": "Estimates",
+        "CUSTOMERS": "Customers",
+        "ACTIVITY_LOG": "ActivityLog",
+        "VENDORS": "Vendors",
+        "CUSTOMER_CONTACTS": "CustomerContacts",
+        "CUSTOMER_DOCUMENTS": "CustomerDocuments",
+        "CUSTOMER_COMMUNICATIONS": "CustomerComms"
+      },
+      "TEMPLATES": {
+        "ESTIMATE": {
+          "FOLDER_ID": "1whTNqMixlToIAzT4ZSqwH4c8b-PUxFoM",
+          "TEMPLATE_DOC_ID": "1uf8ZrAGNIkzoWHfaIaEHYNQ6PqZ7roHfa2FxO0ZkEHg",
+          "FILE_NAME_PREFIX": "EST-"
+        },
+        "CUSTOMER": {
+          "COMMUNICATION": {
+            "ESTIMATE_FOLLOWUP": "EST_FOLLOWUP",
+            "PAYMENT_REMINDER": "PAYMENT_REMINDER",
+            "STATUS_UPDATE": "STATUS_UPDATE"
+          }
+        }
+      },
+      "FOLDERS": {
+        "PARENT_ID": "0AFEjkvrWgRIaUk9PVA"
+      },
+      "CURRENT_CUSTOMER_YEAR": "2025",
+      "CUSTOMER_MODULE": {
+        "DOCUMENT_TYPES": {
+          "ESTIMATE": "ESTIMATE",
+          "CONTRACT": "CONTRACT",
+          "INVOICE": "INVOICE",
+          "COMMUNICATION": "COMMUNICATION",
+          "OTHER": "OTHER"
+        },
+        "CONTACT_ROLES": {
+          "PRIMARY": "PRIMARY",
+          "BILLING": "BILLING",
+          "TECHNICAL": "TECHNICAL",
+          "MANAGEMENT": "MANAGEMENT",
+          "OTHER": "OTHER"
+        },
+        "VIEWS": {
+          "DASHBOARD": "dashboard",
+          "DETAILS": "details",
+          "ESTIMATES": "estimates",
+          "PROJECTS": "projects",
+          "DOCUMENTS": "documents",
+          "CONTACTS": "contacts",
+          "FINANCIALS": "financials",
+          "COMMUNICATIONS": "communications"
+        }
+      }
+    },
+    "templates": {
+      "estimate": {
+        "docId": "1uf8ZrAGNIkzoWHfaIaEHYNQ6PqZ7roHfa2FxO0ZkEHg",
+        "folder": "1whTNqMixlToIAzT4ZSqwH4c8b-PUxFoM",
+        "replacements": [
+          "{{EstimateNumber}}",
+          "{{Date}}",
+          "{{CustomerName}}",
+          "{{CustomerAddress}}",
+          "{{CustomerCityStateZip}}",
+          "{{ScopeOfWork}}"
+        ]
+      }
+    },
+    "folders": {
+      "parent": "0AFEjkvrWgRIaUk9PVA",
+      "structure": {
+        "project": {
+          "subfolders": [
+            "Estimates",
+            "Materials",
+            "SubInvoices"
+          ],
+          "naming": "{customerId}-{projectId}-{projectName}"
+        }
+      }
+    }
+  },
+  "integration": {
+    "driveApi": {},
+    "sheetsApi": {},
+    "documentApi": {},
+    "externalApis": {}
+  }
+}

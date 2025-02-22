@@ -4,6 +4,33 @@
     <base target="_top">
   </head>
   <body>
-    
+    <script>
+      const CustomerFinancials = ({ customer, showMessage }) => {
+        const [financials, setFinancials] = React.useState({
+          totalRevenue: 0,
+          activeProjects: 0,
+          paidInvoices: 0,
+          outstandingInvoices: 0,
+          revenueByYear: {},
+          projectBreakdown: []
+        });
+        
+        React.useEffect(() => {
+          loadFinancials();
+        }, [customer.customerId]);
+
+        const loadFinancials = async () => {
+          // Implement financial data loading from APIs
+          // Use presentation.formatters.currency for amounts
+        };
+
+        return React.createElement('div', { className: 'space-y-6' },
+          // Financial summary cards
+          // Revenue charts
+          // Project financial breakdown
+          // Outstanding invoices list
+        );
+      };
+    </script>
   </body>
 </html>

@@ -72,7 +72,10 @@ const CustomerDetails = ({ customer, onViewEstimates, onViewProjects, showMessag
     const tabs = [
       { id: 'details', label: 'Details' },
       { id: 'estimates', label: 'Estimates' },
-      { id: 'projects', label: 'Projects' }
+      { id: 'projects', label: 'Projects' },
+      { id: 'documents', label: 'Documents' },
+      { id: 'contacts', label: 'Contacts' },
+      { id: 'financials', label: 'Financials' }
     ];
 
     return React.createElement('div', { className: 'border-b border-gray-200 mb-6' },
@@ -181,13 +184,60 @@ const CustomerDetails = ({ customer, onViewEstimates, onViewProjects, showMessag
     );
   };
 
+  const renderEstimatesView = () => {
+    return React.createElement('div', { className: 'px-4 py-5 sm:p-6' },
+      React.createElement(window.EstimatesManager, {
+        customer: customer,
+        onBack: () => setCurrentView('details'),
+        showMessage: showMessage
+      })
+    );
+  };
+
   return React.createElement('div', { className: 'bg-white shadow overflow-hidden sm:rounded-lg' },
     React.createElement(Navigation),
-    currentView === 'estimates'
-      ? React.createElement(window.CustomerEstimatesManager, { customer, showMessage, onBack: () => setCurrentView('details') })
-      : currentView === 'projects'
-        ? React.createElement(window.CustomerProjects, { customer, showMessage, onBack: () => setCurrentView('details') })
-        : renderDetailsView()
+    currentView === 'details' ? renderDetailsView() :
+    currentView === 'estimates' ? renderEstimatesView() :
+    currentView === 'projects' ? React.createElement(window.CustomerProjects, {
+      customer,
+      showMessage,
+      onBack: () => setCurrentView('details')
+    }) :
+    currentView === 'documents' ? React.createElement(window.CustomerDocuments, {
+      customer,
+      showMessage
+    }) :
+    currentView === 'contacts' ? React.createElement(window.CustomerContacts, {
+      customer,
+      showMessage
+    }) :
+    currentView === 'financials' ? React.createElement(window.CustomerFinancials, {
+      customer,
+      showMessage
+    }) : null
+  );
+};
+
+const CustomerForm = () => {
+  const handleValidAddress = (validatedAddress) => {
+    setCustomerData(prev => ({
+      ...prev,
+      address: validatedAddress.street,
+      city: validatedAddress.city,
+      state: validatedAddress.state,
+      zip: validatedAddress.zip,
+      coordinates: validatedAddress.coordinates
+    }));
+  };
+
+  return React.createElement('form', { className: 'space-y-4' },
+    // ...existing form fields...
+    React.createElement(AddressInput, {
+      onValidAddress: handleValidAddress,
+      initialValue: customerData.address,
+      required: true
+    }),
+    // ...existing code...
   );
 };
 

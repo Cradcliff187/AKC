@@ -1,9 +1,287 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-  </head>
-  <body>
+<script>
+const CustomerDocuments = ({ customer, onBack, showMessage }) => {
+  const [state, setState] = React.useState({
+    documents: [],
+    loading: true,
+    error: null,
+    selectedType: 'ALL',
+    showUploadForm: false,
+    uploadFile: null,
+    uploadType: '',
+    uploadName: '',
+    uploadDescription: ''
+  });
+
+  const mountedRef = React.useRef(true);
+  const fileInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!window.CONSTANTS.PERMISSIONS.CUSTOMER.documents?.view?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      setState(prev => ({ ...prev, error: 'Insufficient permissions', loading: false }));
+      return;
+    }
+    loadDocuments();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const loadDocuments = () => {
+    if (!mountedRef.current) return;
+    setState(prev => ({ ...prev, loading: true }));
     
-  </body>
-</html>
+    google.script.run
+      .withSuccessHandler(result => {
+        if (!mountedRef.current) return;
+        setState(prev => ({
+          ...prev,
+          documents: result,
+          loading: false
+        }));
+      })
+      .withFailureHandler(error => {
+        if (!mountedRef.current) return;
+        setState(prev => ({
+          ...prev,
+          error: error.message || 'Failed to load documents',
+          loading: false
+        }));
+        showMessage('Error loading documents', 'error');
+      })
+      .getCustomerDocuments(customer.CustomerID);
+  };
+
+  const handleUpload = (e) => {
+    e.preventDefault();
+    if (!state.uploadFile || !state.uploadType || !state.uploadName) return;
+
+    setState(prev => ({ ...prev, loading: true }));
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Data = e.target.result.split(',')[1];
+
+      google.script.run
+        .withSuccessHandler(() => {
+          if (!mountedRef.current) return;
+          setState(prev => ({
+            ...prev,
+            showUploadForm: false,
+            uploadFile: null,
+            uploadType: '',
+            uploadName: '',
+            uploadDescription: ''
+          }));
+          loadDocuments();
+          showMessage('Document uploaded successfully', 'success');
+        })
+        .withFailureHandler(error => {
+          if (!mountedRef.current) return;
+          setState(prev => ({ ...prev, loading: false }));
+          showMessage(error.message || 'Failed to upload document', 'error');
+        })
+        .uploadCustomerDocument({
+          CustomerID: customer.CustomerID,
+          Type: state.uploadType,
+          Name: state.uploadName,
+          Description: state.uploadDescription,
+          FileData: base64Data,
+          CreatedBy: Session.getActiveUser().getEmail()
+        });
+    };
+    reader.readAsDataURL(state.uploadFile);
+  };
+
+  const handleArchiveDocument = (documentId) => {
+    if (!window.CONSTANTS.PERMISSIONS.CUSTOMER.documents?.archive?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      showMessage('Insufficient permissions to archive document', 'error');
+      return;
+    }
+
+    setState(prev => ({ ...prev, loading: true }));
+
+    google.script.run
+      .withSuccessHandler(() => {
+        if (!mountedRef.current) return;
+        loadDocuments();
+        showMessage('Document archived successfully', 'success');
+      })
+      .withFailureHandler(error => {
+        if (!mountedRef.current) return;
+        setState(prev => ({ ...prev, loading: false }));
+        showMessage(error.message || 'Failed to archive document', 'error');
+      })
+      .archiveCustomerDocument(documentId);
+  };
+
+  return React.createElement('div', { className: 'space-y-6' }, [
+    React.createElement('div', {
+      className: 'flex justify-between items-center mb-6'
+    }, [
+      React.createElement('h2', {
+        className: 'text-2xl font-bold text-gray-900'
+      }, `${customer.CustomerName} - Documents`),
+      React.createElement('button', {
+        onClick: onBack,
+        className: 'px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300'
+      }, '← Back')
+    ]),
+
+    React.createElement('select', {
+      value: state.selectedType,
+      onChange: e => setState(prev => ({ ...prev, selectedType: e.target.value })),
+      className: 'block w-48 px-3 py-2 border border-gray-300 rounded-md shadow-sm'
+    }, [
+      React.createElement('option', { value: 'ALL' }, 'All Documents'),
+      Object.entries(window.CONSTANTS.CUSTOMER_MODULE.DOCUMENT_TYPES).map(([key, value]) =>
+        React.createElement('option', { key, value }, value)
+      )
+    ]),
+
+    state.loading ? React.createElement('div', {
+      className: 'text-center py-4'
+    }, 'Loading...') : state.error ? React.createElement('div', {
+      className: 'text-red-600 bg-red-50 p-4 rounded-md'
+    }, state.error) : React.createElement('div', {
+      className: 'bg-white shadow overflow-hidden sm:rounded-lg'
+    }, [
+      React.createElement('table', {
+        className: 'min-w-full divide-y divide-gray-200'
+      }, [
+        React.createElement('thead', {
+          className: 'bg-gray-50'
+        }, [
+          React.createElement('tr', null, [
+            'Type',
+            'Name',
+            'Created',
+            'Status',
+            'Actions'
+          ].map(header =>
+            React.createElement('th', {
+              key: header,
+              className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+            }, header)
+          ))
+        ]),
+        React.createElement('tbody', {
+          className: 'bg-white divide-y divide-gray-200'
+        }, state.documents
+          .filter(doc => state.selectedType === 'ALL' || doc.Type === state.selectedType)
+          .map(doc =>
+            React.createElement('tr', { key: doc.DocumentID }, [
+              React.createElement('td', {
+                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-500'
+              }, doc.Type),
+              React.createElement('td', {
+                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+              }, doc.Name),
+              React.createElement('td', {
+                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-500'
+              }, new Date(doc.CreatedOn).toLocaleDateString()),
+              React.createElement('td', {
+                className: 'px-6 py-4 whitespace-nowrap'
+              }, React.createElement('span', {
+                className: `px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  doc.Status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                  doc.Status === 'ARCHIVED' ? 'bg-gray-100 text-gray-800' :
+                  'bg-yellow-100 text-yellow-800'
+                }`
+              }, doc.Status)),
+              React.createElement('td', {
+                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-500'
+              }, [
+                React.createElement('a', {
+                  href: doc.URL,
+                  target: '_blank',
+                  className: 'text-blue-600 hover:text-blue-900'
+                }, 'View'),
+                React.createElement('button', {
+                  onClick: () => handleArchiveDocument(doc.DocumentID),
+                  className: 'ml-2 text-red-600 hover:text-red-900'
+                }, 'Archive')
+              ])
+            ])
+          ))
+      ])
+    ]),
+
+    state.showUploadForm && React.createElement('form', {
+      onSubmit: handleUpload,
+      className: 'space-y-4'
+    }, [
+      React.createElement('div', null, [
+        React.createElement('label', {
+          className: 'block text-sm font-medium text-gray-700'
+        }, 'Document Type'),
+        React.createElement('select', {
+          value: state.uploadType,
+          onChange: e => setState(prev => ({ ...prev, uploadType: e.target.value })),
+          className: 'mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm'
+        }, [
+          React.createElement('option', { value: '' }, 'Select Type'),
+          Object.entries(window.CONSTANTS.CUSTOMER_MODULE.DOCUMENT_TYPES).map(([key, value]) =>
+            React.createElement('option', { key, value }, value)
+          )
+        ])
+      ]),
+      React.createElement('div', null, [
+        React.createElement('label', {
+          className: 'block text-sm font-medium text-gray-700'
+        }, 'Document Name'),
+        React.createElement('input', {
+          type: 'text',
+          value: state.uploadName,
+          onChange: e => setState(prev => ({ ...prev, uploadName: e.target.value })),
+          className: 'mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm'
+        })
+      ]),
+      React.createElement('div', null, [
+        React.createElement('label', {
+          className: 'block text-sm font-medium text-gray-700'
+        }, 'Description'),
+        React.createElement('textarea', {
+          value: state.uploadDescription,
+          onChange: e => setState(prev => ({ ...prev, uploadDescription: e.target.value })),
+          className: 'mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm'
+        })
+      ]),
+      React.createElement('div', null, [
+        React.createElement('label', {
+          className: 'block text-sm font-medium text-gray-700'
+        }, 'File'),
+        React.createElement('input', {
+          type: 'file',
+          ref: fileInputRef,
+          onChange: e => setState(prev => ({ ...prev, uploadFile: e.target.files[0] })),
+          className: 'mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm'
+        })
+      ]),
+      React.createElement('div', {
+        className: 'flex justify-end'
+      }, [
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => setState(prev => ({ ...prev, showUploadForm: false })),
+          className: 'px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300'
+        }, 'Cancel'),
+        React.createElement('button', {
+          type: 'submit',
+          className: 'ml-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700'
+        }, 'Upload')
+      ])
+    ]),
+
+    !state.showUploadForm && React.createElement('button', {
+      onClick: () => setState(prev => ({ ...prev, showUploadForm: true })),
+      className: 'px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700'
+    }, 'Upload Document')
+  ]);
+};
+
+window.CustomerDocuments = CustomerDocuments;
+</script>

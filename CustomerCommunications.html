@@ -1,9 +1,155 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-  </head>
-  <body>
-    
-  </body>
-</html>
+<script>
+const CustomerCommunications = ({ customer, showMessage }) => {
+  const [state, setState] = React.useState({
+    communications: [],
+    loading: true,
+    error: null,
+    showNewMessageForm: false,
+    newMessage: {
+      type: window.CONSTANTS.COMMUNICATION_TYPES.STATUS_UPDATE,
+      subject: '',
+      content: '',
+      sentTo: customer.contactEmail || '',
+      status: window.CONSTANTS.COMMUNICATION_STATUSES.DRAFT,
+      channel: 'EMAIL',
+      priority: 'NORMAL',
+      deliveryPreference: customer.preferredChannel || 'EMAIL'
+    }
+  });
+
+  const mountedRef = React.useRef(true);
+
+  React.useEffect(() => {
+    if (!window.CONSTANTS.PERMISSIONS.CUSTOMER.communications?.view?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      setState(prev => ({ ...prev, error: 'Insufficient permissions', loading: false }));
+      return;
+    }
+    loadCommunications();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [customer.CustomerID]);
+
+  const loadCommunications = () => {
+    if (!mountedRef.current) return;
+    setState(prev => ({ ...prev, loading: true }));
+
+    google.script.run
+      .withSuccessHandler(result => {
+        if (!mountedRef.current) return;
+        setState(prev => ({
+          ...prev,
+          communications: result,
+          loading: false
+        }));
+      })
+      .withFailureHandler(error => {
+        if (!mountedRef.current) return;
+        setState(prev => ({
+          ...prev,
+          error: error.message || 'Failed to load communications',
+          loading: false
+        }));
+        showMessage('Error loading communications', 'error');
+      })
+      .getCustomerCommunications(customer.CustomerID);
+  };
+
+  const handleSendMessage = (messageData) => {
+    if (!mountedRef.current) return;
+    setState(prev => ({ ...prev, loading: true }));
+
+    google.script.run
+      .withSuccessHandler(() => {
+        if (!mountedRef.current) return;
+        loadCommunications();
+        setState(prev => ({
+          ...prev,
+          showNewMessageForm: false,
+          newMessage: { ...state.newMessage, subject: '', content: '' }
+        }));
+        showMessage('Message sent successfully', 'success');
+      })
+      .withFailureHandler(error => {
+        if (!mountedRef.current) return;
+        setState(prev => ({ ...prev, loading: false }));
+        showMessage(error.message || 'Failed to send message', 'error');
+      })
+      .sendCustomerCommunication({
+        ...messageData,
+        CustomerID: customer.CustomerID,
+        CreatedBy: Session.getActiveUser().getEmail()
+      });
+  };
+
+  return React.createElement('div', { className: 'space-y-6' }, [
+    React.createElement('div', {
+      className: 'flex justify-between items-center mb-6'
+    }, [
+      React.createElement('h2', {
+        className: 'text-2xl font-bold text-gray-900'
+      }, 'Communications'),
+      React.createElement('button', {
+        onClick: () => setState(prev => ({ ...prev, showNewMessageForm: true })),
+        className: 'px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700'
+      }, 'New Message')
+    ]),
+
+    state.loading ? React.createElement('div', {
+      className: 'text-center py-4'
+    }, 'Loading...') : state.error ? React.createElement('div', {
+      className: 'text-red-600 bg-red-50 p-4 rounded-md'
+    }, state.error) : React.createElement('div', {
+      className: 'space-y-4'
+    }, state.communications.map(comm =>
+      React.createElement('div', {
+        key: comm.CommunicationID,
+        className: 'bg-white shadow-sm rounded-lg p-4'
+      }, [
+        React.createElement('div', {
+          className: 'flex justify-between items-start'
+        }, [
+          React.createElement('div', null, [
+            React.createElement('h3', {
+              className: 'text-lg font-medium'
+            }, comm.Subject),
+            React.createElement('p', {
+              className: 'text-sm text-gray-500'
+            }, `Sent to: ${comm.SentTo}`)
+          ]),
+          React.createElement('span', {
+            className: `px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+              ${comm.Status === 'SENT' ? 'bg-green-100 text-green-800' : 
+                comm.Status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 
+                'bg-gray-100 text-gray-800'}`
+          }, comm.Status)
+        ]),
+        React.createElement('p', {
+          className: 'mt-2 text-gray-700'
+        }, comm.Content),
+        React.createElement('div', {
+          className: 'mt-4 flex justify-between items-center text-sm text-gray-500'
+        }, [
+          React.createElement('span', null, new Date(comm.CreatedOn).toLocaleString()),
+          React.createElement('div', {
+            className: 'flex space-x-4'
+          }, [
+            React.createElement('button', {
+              onClick: () => handleReply(comm),
+              className: 'text-blue-600 hover:text-blue-800'
+            }, 'Reply'),
+            React.createElement('button', {
+              onClick: () => handleForward(comm),
+              className: 'text-blue-600 hover:text-blue-800'
+            }, 'Forward')
+          ])
+        ])
+      ])
+    ))
+  ]);
+};
+
+window.CustomerCommunications = CustomerCommunications;
+</script>

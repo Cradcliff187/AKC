@@ -7,8 +7,20 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [viewMode, setViewMode] = React.useState('list'); // 'list', 'details', 'timeline'
   const [filterStatus, setFilterStatus] = React.useState('all');
+  const [error, setError] = React.useState(null);
 
   const mountedRef = React.useRef(true);
+
+  // Match blueprint status flow
+  const STATUS_CONFIG = {
+    DRAFT: { color: 'gray', label: 'Draft', actions: ['submit', 'cancel'] },
+    PENDING: { color: 'yellow', label: 'Pending', actions: ['approve', 'reject', 'cancel'] },
+    APPROVED: { color: 'blue', label: 'Approved', actions: ['start', 'cancel'] },
+    IN_PROGRESS: { color: 'blue', label: 'In Progress', actions: ['complete', 'cancel'] },
+    COMPLETED: { color: 'green', label: 'Completed', actions: ['close'] },
+    CANCELLED: { color: 'red', label: 'Cancelled', actions: [] },
+    CLOSED: { color: 'gray', label: 'Closed', actions: [] }
+  };
 
   // Lifecycle
   React.useEffect(() => {
@@ -51,26 +63,26 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
 
   // Status update handler
   const handleStatusUpdate = async (projectId, newStatus) => {
-    try {
-      const response = await new Promise(resolve => {
-        google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(err => resolve({ success: false, error: err.message }))
-          .updateProjectStatus({
-            projectId,
-            newStatus
+    setLoading(true);
+    google.script.run
+      .withSuccessHandler(function(result) {
+        setProjects(function(prevProjects) {
+          return prevProjects.map(function(project) {
+            return project.projectId === projectId ? 
+              { ...project, status: newStatus } : project;
           });
+        });
+        setLoading(false);
+      })
+      .withFailureHandler(function(error) {
+        setError(error);
+        setLoading(false);
+      })
+      .updateProjectStatus({
+        projectId: projectId,
+        newStatus: newStatus,
+        customerId: customer.customerId
       });
-
-      if (response.success) {
-        showMessage('Project status updated successfully', 'success');
-        fetchProjects(); // Refresh project list
-      } else {
-        showMessage(response.error || 'Failed to update project status', 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to update project status', 'error');
-    }
   };
 
   // Filter projects based on status
@@ -187,13 +199,15 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
                   }).format(project.value || 0)
                 ),
                 React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
-                  React.createElement('button', {
-                    onClick: () => {
-                      setSelectedProject(project);
-                      setViewMode('details');
-                    },
-                    className: 'text-indigo-600 hover:text-indigo-900'
-                  }, 'View Details')
+                  React.createElement('div', { className: 'flex space-x-2' },
+                    STATUS_CONFIG[project.status].actions.map(action =>
+                      React.createElement('button', {
+                        key: action,
+                        onClick: () => handleStatusUpdate(project.projectId, action.toUpperCase()),
+                        className: 'text-sm px-2 py-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                      }, action)
+                    )
+                  )
                 )
               )
             )
@@ -225,6 +239,34 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
     )
   );
 };
+
+// ErrorBoundary component
+function ProjectErrorBoundary(props) {
+  var [hasError, setHasError] = React.useState(false);
+  var [error, setError] = React.useState(null);
+
+  React.useEffect(function() {
+    if (props.error) {
+      setHasError(true);
+      setError(props.error);
+    }
+  }, [props.error]);
+
+  if (hasError) {
+    return React.createElement('div', {
+      className: 'rounded-md bg-red-50 p-4 my-4'
+    }, [
+      React.createElement('h3', {
+        className: 'text-red-800 font-medium'
+      }, 'Error'),
+      React.createElement('p', {
+        className: 'text-red-700 mt-2'
+      }, error?.message || 'An error occurred')
+    ]);
+  }
+
+  return props.children;
+}
 
 // Export to window
 window.CustomerProjects = CustomerProjects;

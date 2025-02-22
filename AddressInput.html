@@ -1,0 +1,68 @@
+<script>
+const AddressInput = ({ onValidAddress, initialValue = '', required = false }) => {
+  const [address, setAddress] = React.useState(initialValue);
+  const [error, setError] = React.useState('');
+  const [isValidating, setIsValidating] = React.useState(false);
+  const autocompleteRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!window.MAPS_API || !window.MAPS_API.initialized) {
+      setError('Maps API not available');
+      return;
+    }
+
+    const input = document.getElementById('address-input');
+    autocompleteRef.current = new google.maps.places.Autocomplete(input, {
+      componentRestrictions: { country: 'US' },
+      fields: ['address_components', 'geometry', 'formatted_address']
+    });
+
+    autocompleteRef.current.addListener('place_changed', handlePlaceSelect);
+
+    return () => {
+      if (autocompleteRef.current) {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+    };
+  }, []);
+
+  const handlePlaceSelect = async () => {
+    const place = autocompleteRef.current.getPlace();
+    if (!place.geometry) {
+      setError('Please select an address from the dropdown');
+      return;
+    }
+
+    try {
+      setIsValidating(true);
+      const validatedAddress = await AddressValidator.validateAddress(place.formatted_address);
+      setError('');
+      onValidAddress(validatedAddress);
+    } catch (err) {
+      setError('Invalid address. Please try again.');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  return React.createElement('div', { className: 'address-input-container' },
+    React.createElement('input', {
+      id: 'address-input',
+      type: 'text',
+      value: address,
+      onChange: (e) => setAddress(e.target.value),
+      placeholder: 'Enter address...',
+      className: `w-full p-2 border rounded ${error ? 'border-red-500' : 'border-gray-300'}`,
+      required: required
+    }),
+    isValidating && React.createElement('span', { 
+      className: 'loading-indicator text-gray-500' 
+    }, 'Validating...'),
+    error && React.createElement('span', { 
+      className: 'error-message text-red-500 text-sm mt-1' 
+    }, error)
+  );
+};
+
+window.AddressInput = AddressInput;
+</script>

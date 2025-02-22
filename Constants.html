@@ -1,26 +1,179 @@
 <script>
-// Initialize loading state
-console.log('Loading status constants from server...');
+// Initialize a ready state flag
+window.CONSTANTS = {
+  // Core Status Definitions
+  ESTIMATE_STATUSES: {
+    DRAFT: 'DRAFT',
+    PENDING: 'PENDING',
+    APPROVED: 'APPROVED',
+    REJECTED: 'REJECTED',
+    COMPLETED: 'COMPLETED',
+    CANCELLED: 'CANCELLED',
+    CLOSED: 'CLOSED'
+  },
 
-// Load constants from server
-google.script.run
-  .withSuccessHandler(function(constants) {
-    console.log('Received constants from server:', constants);
-    
-    // Set constants on window object
-    window.ESTIMATE_STATUSES = constants.ESTIMATE_STATUSES;
-    window.PROJECT_STATUSES = constants.PROJECT_STATUSES;
-    window.CUSTOMER_STATUSES = constants.CUSTOMER_STATUSES;
-    window.STATUS_TRANSITIONS = constants.STATUS_TRANSITIONS;
-    window.MODULE_ACCESS_STATUSES = constants.MODULE_ACCESS_STATUSES;
+  // Status Configuration with UI elements
+  STATUS_CONFIG: {
+    ESTIMATE: {
+      DRAFT: { color: 'gray', icon: 'edit', label: 'Draft', actions: ['submit', 'cancel'] },
+      PENDING: { color: 'yellow', icon: 'clock', label: 'Pending Review', actions: ['approve', 'reject', 'cancel'] },
+      APPROVED: { color: 'green', icon: 'check', label: 'Approved', actions: ['complete', 'cancel'] },
+      REJECTED: { color: 'red', icon: 'x', label: 'Rejected', actions: ['revise', 'cancel'] },
+      COMPLETED: { color: 'blue', icon: 'flag', label: 'Completed', actions: ['close'] },
+      CANCELLED: { color: 'gray', icon: 'ban', label: 'Cancelled', actions: [] },
+      CLOSED: { color: 'gray', icon: 'archive', label: 'Closed', actions: [] }
+    },
+    PROJECT: {
+      DRAFT: { color: 'gray', icon: 'edit', label: 'Draft', actions: ['submit', 'cancel'] },
+      PENDING: { color: 'yellow', icon: 'clock', label: 'Pending', actions: ['approve', 'reject', 'cancel'] },
+      APPROVED: { color: 'blue', icon: 'check', label: 'Approved', actions: ['start', 'cancel'] },
+      IN_PROGRESS: { color: 'blue', icon: 'flag', label: 'In Progress', actions: ['complete', 'cancel'] },
+      COMPLETED: { color: 'green', icon: 'check', label: 'Completed', actions: ['close'] },
+      CANCELLED: { color: 'red', icon: 'ban', label: 'Cancelled', actions: [] },
+      CLOSED: { color: 'gray', icon: 'archive', label: 'Closed', actions: [] }
+    },
+    CUSTOMER: {
+      ACTIVE: { color: 'green', icon: '●', label: 'Active' },
+      INACTIVE: { color: 'red', icon: '○', label: 'Inactive' },
+      PENDING: { color: 'yellow', icon: '◐', label: 'Pending' }
+    }
+  },
 
-    // Dispatch event when constants are loaded
-    window.dispatchEvent(new Event('constants_loaded'));
+  // Permission Configuration
+  PERMISSIONS: {
+    ESTIMATE: {
+      submit: ['CREATOR', 'ADMIN'],
+      approve: ['MANAGER', 'ADMIN'],
+      reject: ['MANAGER', 'ADMIN'],
+      revise: ['CREATOR', 'ADMIN'],
+      complete: ['CREATOR', 'MANAGER', 'ADMIN'],
+      cancel: ['CREATOR', 'MANAGER', 'ADMIN'],
+      close: ['MANAGER', 'ADMIN']
+    },
+    PROJECT: {
+      submit: ['CREATOR', 'ADMIN'],
+      approve: ['MANAGER', 'ADMIN'],
+      reject: ['MANAGER', 'ADMIN'],
+      start: ['CREATOR', 'MANAGER', 'ADMIN'],
+      complete: ['CREATOR', 'MANAGER', 'ADMIN'],
+      cancel: ['MANAGER', 'ADMIN'],
+      close: ['MANAGER', 'ADMIN']
+    },
+    CUSTOMER: {
+      view: ['CREATOR', 'MANAGER', 'ADMIN'],
+      edit: ['MANAGER', 'ADMIN'],
+      delete: ['ADMIN']
+    }
+  },
+
+  // Validation Rules
+  VALIDATION_RULES: {
+    ESTIMATE: {
+      amount: { min: 0, required: true },
+      description: { minLength: 10, required: true },
+      date: { required: true }
+    },
+    PROJECT: {
+      startDate: { required: true },
+      description: { minLength: 10, required: true }
+    },
+    INVOICE: {
+      date: { required: true },
+      description: { minLength: 10, required: true },
+      subcontractor: { minLength: 3, required: true },
+      materialsCost: { min: 0, required: true },
+      laborCost: { min: 0, required: true }
+    }
+  },
+
+  // Utility Functions
+  ADDRESS_UTILS: {
+    formatAddress: function(components) {
+      var street = components.street || '';
+      var city = components.city || '';
+      var state = components.state || '';
+      var zip = components.zip || '';
+      return street + ', ' + city + ', ' + state + ' ' + zip;
+    },
     
-    console.log('Frontend constants initialized');
-  })
-  .withFailureHandler(function(error) {
-    console.error('Failed to load constants:', error);
-  })
-  .getStatusConstants();
+    validateAddressComponents: function(components) {
+      var required = ['street', 'city', 'state', 'zip'];
+      return required.every(function(field) {
+        return components[field];
+      });
+    }
+  },
+
+  // Validation Functions
+  validate: {
+    estimate: function(data) {
+      var errors = [];
+      var rules = window.CONSTANTS.VALIDATION_RULES.ESTIMATE;
+      
+      if (!data.amount || data.amount < rules.amount.min) {
+        errors.push('Invalid amount');
+      }
+      if (!data.description || data.description.length < rules.description.minLength) {
+        errors.push('Description too short');
+      }
+      if (!data.date && rules.date.required) {
+        errors.push('Date is required');
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors: errors
+      };
+    },
+    project: function(data) {
+      var errors = [];
+      var rules = window.CONSTANTS.VALIDATION_RULES.PROJECT;
+      
+      if (!data.startDate && rules.startDate.required) {
+        errors.push('Start date is required');
+      }
+      if (!data.description || data.description.length < rules.description.minLength) {
+        errors.push('Description too short');
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors: errors
+      };
+    }
+  }
+};
+
+// Constants verification
+window.addEventListener('DOMContentLoaded', function() {
+  var requiredConstants = [
+    'ESTIMATE_STATUSES',
+    'STATUS_CONFIG',
+    'PERMISSIONS',
+    'VALIDATION_RULES',
+    'ADDRESS_UTILS',
+    'validate'
+  ];
+  
+  var missingConstants = requiredConstants.filter(function(constant) {
+    return !window.CONSTANTS[constant];
+  });
+  
+  if (missingConstants.length > 0) {
+    console.error('Missing required constants:', missingConstants);
+    return;
+  }
+  
+  window.CONSTANTS_LOADED = true;
+  window.dispatchEvent(new Event('constants_loaded'));
+});
+
+// Helper function for waiting on constants
+window.waitForConstants = function(callback) {
+  if (window.CONSTANTS_LOADED) {
+    callback();
+  } else {
+    window.addEventListener('constants_loaded', callback);
+  }
+};
 </script>
