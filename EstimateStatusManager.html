@@ -1,0 +1,77 @@
+<script>
+const EstimateStatusManager = {
+  validateTransition: (currentStatus, newStatus) => {
+    // Use workflow from blueprint instead of local transitions
+    const workflow = CONSTANTS.workflow.estimateManagement;
+    return workflow.transitions[currentStatus]?.includes(newStatus);
+  },
+
+  executeTransition: async (estimateId, newStatus, currentStatus) => {
+    const workflow = CONSTANTS.workflow.estimateManagement;
+    
+    // Execute before transition hooks from blueprint
+    for (const hook of workflow.hooks.beforeTransition) {
+      try {
+        await google.script.run
+          .withSuccessHandler(response => response)
+          .withFailureHandler(error => { throw error; })
+          [hook]({
+            estimateId,
+            oldStatus: currentStatus,
+            newStatus
+          });
+      } catch (error) {
+        // Execute error hooks
+        for (const errorHook of workflow.hooks.onError) {
+          await google.script.run[errorHook]({
+            error: error.message,
+            estimateId,
+            oldStatus: currentStatus,
+            newStatus
+          });
+        }
+        throw error;
+      }
+    }
+
+    const result = await google.script.run
+      .withSuccessHandler(response => response)
+      .withFailureHandler(error => {
+        throw new Error(error.message || 'Status update failed');
+      })
+      .updateEstimateStatusForClient({
+        estimateId,
+        newStatus,
+        currentStatus
+      });
+
+    // Execute after transition hooks from blueprint
+    for (const hook of workflow.hooks.afterTransition) {
+      await google.script.run
+        .withSuccessHandler(() => {})
+        .withFailureHandler(console.error)
+        [hook]({
+          estimateId,
+          oldStatus: currentStatus,
+          newStatus,
+          result
+        });
+    }
+
+    return result;
+  },
+
+  getStatusDisplay: (status) => {
+    const workflow = CONSTANTS.workflow.estimateManagement;
+    return workflow.statusDisplay[status] || {
+      color: 'gray',
+      icon: 'circle'
+    };
+  }
+};
+
+// Make available in both server and client contexts
+if (typeof this !== 'undefined') {
+  this.EstimateStatusManager = EstimateStatusManager;
+}
+</script>

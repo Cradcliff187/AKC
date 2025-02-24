@@ -62,15 +62,123 @@ const CustomerManagement = () => {
     }));
   };
 
+  const handleStatusChange = async (customerId, newStatus, currentStatus) => {
+    if (!window.CONSTANTS.PERMISSIONS.CUSTOMER.update?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      setState(prev => ({ ...prev, error: 'Insufficient permissions' }));
+      return;
+    }
+  
+    const allowedTransitions = window.CONSTANTS.workflow.customerManagement.transitions[currentStatus];
+    if (!allowedTransitions?.includes(newStatus)) {
+      setState(prev => ({
+        ...prev,
+        message: { text: 'Invalid status transition', type: 'error' }
+      }));
+      return;
+    }
+  
+    setState(prev => ({ ...prev, loading: true }));
+  
+    try {
+      // Log before transition
+      await google.script.run
+        .withSuccessHandler(() => {})
+        .logActivity({
+          action: 'STATUS_CHANGE',
+          moduleType: 'CUSTOMER',
+          referenceId: customerId,
+          details: { oldStatus: currentStatus, newStatus }
+        });
+  
+      // Update status
+      await google.script.run
+        .withSuccessHandler(() => {
+          if (!mountedRef.current) return;
+          loadCustomers();
+          setState(prev => ({
+            ...prev,
+            message: { text: 'Status updated successfully', type: 'success' }
+          }));
+        })
+        .withFailureHandler(error => {
+          if (!mountedRef.current) return;
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            error: error.message || 'Failed to update status'
+          }));
+        })
+        .updateCustomerStatus(customerId, newStatus);
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message || 'Failed to update status'
+      }));
+    }
+  };
+
+  const logNavigation = (tabId, customerId) => {
+    google.script.run
+      .withFailureHandler(error => console.error('Failed to log activity:', error))
+      .logActivity({
+        action: 'VIEW_CHANGE',
+        moduleType: 'CUSTOMER',
+        referenceId: customerId,
+        details: { view: tabId }
+      });
+  };
+
   const TABS = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'contacts', label: 'Contacts', icon: '👥' },
-    { id: 'projects', label: 'Projects', icon: '🏗️' },
-    { id: 'estimates', label: 'Estimates', icon: '📄' },
-    { id: 'documents', label: 'Documents', icon: '📁' },
-    { id: 'communications', label: 'Communications', icon: '✉️' },
-    { id: 'financials', label: 'Financials', icon: '💰' }
-  ];
+    {
+      id: 'overview',
+      label: 'Overview',
+      icon: '📊',
+      permission: 'view'
+    },
+    {
+      id: 'contacts',
+      label: 'Contacts',
+      icon: '👥',
+      permission: 'contacts.view'
+    },
+    {
+      id: 'projects',
+      label: 'Projects',
+      icon: '🏗️',
+      permission: 'projects.view'
+    },
+    {
+      id: 'estimates',
+      label: 'Estimates',
+      icon: '📄',
+      permission: 'estimates.view'
+    },
+    {
+      id: 'documents',
+      label: 'Documents',
+      icon: '📁',
+      permission: 'documents.view'
+    },
+    {
+      id: 'communications',
+      label: 'Communications',
+      icon: '✉️',
+      permission: 'communications.view'
+    },
+    {
+      id: 'financials',
+      label: 'Financials',
+      icon: '💰',
+      permission: 'financials.view'
+    }
+  ].filter(tab => 
+    window.CONSTANTS.PERMISSIONS.CUSTOMER[tab.permission]?.includes(
+      window.CONSTANTS.USER_ROLE
+    )
+  );
 
   const TabNavigator = () => {
     return React.createElement('nav', {
@@ -78,7 +186,10 @@ const CustomerManagement = () => {
     }, TABS.map(tab => 
       React.createElement('button', {
         key: tab.id,
-        onClick: () => setState(prev => ({ ...prev, activeTab: tab.id })),
+        onClick: () => {
+          setState(prev => ({ ...prev, activeTab: tab.id }));
+          logNavigation(tab.id, state.customer?.id);
+        },
         className: `px-3 py-2 rounded-md text-sm font-medium ${
           state.activeTab === tab.id 
             ? 'bg-blue-100 text-blue-700' 
@@ -100,6 +211,7 @@ const CustomerManagement = () => {
     }, 'Loading...') : state.error ? React.createElement('div', {
       className: 'text-red-600 bg-red-50 p-4 rounded-md'
     }, state.error) : React.createElement('div', null, [
+      React.createElement(MessageAlert, { message: state.message }),
       // Customer List or Details View
       state.mode === 'list' 
         ? React.createElement(window.CustomerList, {
@@ -120,5 +232,21 @@ const CustomerManagement = () => {
   ]);
 };
 
+const MessageAlert = ({ message }) => {
+  if (!message.text) return null;
+  
+  return React.createElement('div', {
+    className: `rounded-md p-4 ${
+      message.type === 'error' ? 'bg-red-50 text-red-700' :
+      message.type === 'success' ? 'bg-green-50 text-green-700' :
+      'bg-blue-50 text-blue-700'
+    }`
+  }, message.text);
+};
+
 window.CustomerManagement = CustomerManagement;
+
+if (typeof this !== 'undefined') {
+  this.CustomerManagement = CustomerManagement;
+}
 </script>

@@ -1,0 +1,79 @@
+function testComponentDeclarations() {
+  try {
+    const htmlOutput = HtmlService.createTemplateFromFile('Index').evaluate();
+    const content = htmlOutput.getContent();
+    
+    const components = [
+      'AddressValidator',
+      'StatusBadge', 
+      'MessageAlert',
+      'handleStatusChange'
+    ];
+    
+    const results = {};
+    
+    components.forEach(component => {
+      const matches = content.match(new RegExp(`const ${component}`, 'g'));
+      results[component] = matches ? matches.length : 0;
+    });
+    
+    return {
+      success: true,
+      results
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+function runDependencyLoadTest() {
+  return {
+    constantsAvailable: typeof CONSTANTS !== 'undefined',
+    validateCustomerData: typeof validateCustomerData === 'function',
+    address: typeof AddressValidator !== 'undefined',
+    status: typeof StatusBadge !== 'undefined',
+    message: typeof MessageAlert !== 'undefined'
+  };
+}
+
+function testComponentAvailability() {
+  const results = {
+    constants: typeof CONSTANTS !== 'undefined',
+    sharedComponents: typeof SharedComponents !== 'undefined',
+    statusBadge: typeof StatusBadge !== 'undefined',
+    messageAlert: typeof MessageAlert !== 'undefined',
+    addressValidator: typeof AddressValidator !== 'undefined',
+    validateCustomerData: typeof validateCustomerData === 'function'
+  };
+  
+  Logger.log(JSON.stringify(results, null, 2));
+  return results;
+}
+
+function runAllTests() {
+  Logger.log('Starting component declaration tests...');
+  const declarations = testComponentDeclarations();
+  
+  for (const [component, count] of Object.entries(declarations.results)) {
+    if (count > 1) {
+      Logger.log(`ERROR: ${component} declared ${count} times`);
+    }
+  }
+  
+  Logger.log('Starting dependency load tests...');
+  const deps = runDependencyLoadTest();
+  
+  for (const [dep, available] of Object.entries(deps)) {
+    if (!available) {
+      Logger.log(`ERROR: ${dep} not available`);
+    }
+  }
+  
+  return {
+    declarations,
+    dependencies: deps
+  };
+}

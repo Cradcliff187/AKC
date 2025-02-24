@@ -26,6 +26,19 @@ const AddressInput = ({ onValidAddress, initialValue = '', required = false }) =
     };
   }, []);
 
+  const validateAddressFormat = (components) => {
+    const required = window.CONSTANTS.ADDRESS_VALIDATION.REQUIRED_FIELDS;
+    const missing = required.filter(field => 
+      !components.find(c => c.types.includes(field))
+    );
+
+    if (missing.length > 0) {
+      throw new Error(`Missing required fields: ${missing.join(', ')}`);
+    }
+
+    return true;
+  };
+
   const handlePlaceSelect = async () => {
     const place = autocompleteRef.current.getPlace();
     if (!place.geometry) {
@@ -35,33 +48,116 @@ const AddressInput = ({ onValidAddress, initialValue = '', required = false }) =
 
     try {
       setIsValidating(true);
-      const validatedAddress = await AddressValidator.validateAddress(place.formatted_address);
+      validateAddressFormat(place.address_components);
+      
+      const validatedAddress = await AddressValidationService.validateAddress(
+        place.formatted_address
+      );
+
+      // Log address validation
+      await google.script.run
+        .withFailureHandler(console.error)
+        .logActivity({
+          action: 'ADDRESS_VALIDATION',
+          moduleType: 'ADDRESS',
+          details: {
+            originalAddress: place.formatted_address,
+            validatedAddress: validatedAddress,
+            timestamp: new Date().toISOString()
+          }
+        });
+
       setError('');
       onValidAddress(validatedAddress);
     } catch (err) {
-      setError('Invalid address. Please try again.');
+      setError(err.message || 'Invalid address. Please try again.');
     } finally {
       setIsValidating(false);
     }
   };
 
-  return React.createElement('div', { className: 'address-input-container' },
-    React.createElement('input', {
-      id: 'address-input',
-      type: 'text',
-      value: address,
-      onChange: (e) => setAddress(e.target.value),
-      placeholder: 'Enter address...',
-      className: `w-full p-2 border rounded ${error ? 'border-red-500' : 'border-gray-300'}`,
-      required: required
-    }),
-    isValidating && React.createElement('span', { 
-      className: 'loading-indicator text-gray-500' 
-    }, 'Validating...'),
-    error && React.createElement('span', { 
-      className: 'error-message text-red-500 text-sm mt-1' 
-    }, error)
-  );
+  return React.createElement('div', { className: 'space-y-2' }, [
+    React.createElement('div', { className: 'address-input-container' }, [
+      React.createElement('label', {
+        htmlFor: 'address-input',
+        className: 'block text-sm font-medium text-gray-700 mb-1'
+      }, `Address${required ? ' *' : ''}`),
+      React.createElement('input', {
+        id: 'address-input',
+        type: 'text',
+        value: address,
+        onChange: (e) => setAddress(e.target.value),
+        placeholder: window.CONSTANTS.ADDRESS_VALIDATION.PLACEHOLDER,
+        className: `w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500 
+          ${error ? 'border-red-500' : 'border-gray-300'}`,
+        required: required
+      })
+    ]),
+    isValidating && React.createElement('div', { 
+      className: 'flex items-center text-sm text-gray-500' 
+    }, [
+      React.createElement('svg', {
+        className: 'animate-spin h-4 w-4 mr-2',
+        viewBox: '0 0 24 24'
+      }),
+      'Validating address...'
+    ]),
+    error && React.createElement(ValidationMessage, {
+      type: 'error',
+      message: error
+    })
+  ]);
+};
+
+const AddressValidationService = {
+  validateAddress: async (address) => {
+    const response = await google.script.run
+      .withSuccessHandler(result => result)
+      .withFailureHandler(error => {
+        throw new Error(error.message || 'Address validation failed');
+      })
+      .validateAddress({
+        address,
+        type: window.CONSTANTS.ADDRESS_VALIDATION.TYPE.CUSTOMER,
+        strictMode: window.CONSTANTS.ADDRESS_VALIDATION.STRICT_MODE
+      });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Invalid address');
+    }
+
+    return response.data;
+  }
+};
+
+const AddressDisplay = ({ address }) => {
+  const format = window.CONSTANTS.ADDRESS_VALIDATION.FORMAT;
+  
+  return React.createElement('div', {
+    className: 'text-sm text-gray-600'
+  }, [
+    React.createElement('div', null, [
+      address.street1,
+      address.street2 && React.createElement('div', null, address.street2)
+    ]),
+    React.createElement('div', null, [
+      `${address.city}, ${address.state} ${address.zip}`
+    ])
+  ]);
+};
+
+const ValidationMessage = ({ type, message }) => {
+  if (!message) return null;
+
+  const styles = {
+    error: 'text-red-500',
+    warning: 'text-yellow-500',
+    success: 'text-green-500'
+  };
+
+  return React.createElement('div', {
+    className: `text-sm ${styles[type]} mt-1`
+  }, message);
 };
 
 window.AddressInput = AddressInput;

@@ -13,13 +13,42 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
 
   // Match blueprint status flow
   const STATUS_CONFIG = {
-    DRAFT: { color: 'gray', label: 'Draft', actions: ['submit', 'cancel'] },
-    PENDING: { color: 'yellow', label: 'Pending', actions: ['approve', 'reject', 'cancel'] },
-    APPROVED: { color: 'blue', label: 'Approved', actions: ['start', 'cancel'] },
-    IN_PROGRESS: { color: 'blue', label: 'In Progress', actions: ['complete', 'cancel'] },
-    COMPLETED: { color: 'green', label: 'Completed', actions: ['close'] },
-    CANCELLED: { color: 'red', label: 'Cancelled', actions: [] },
-    CLOSED: { color: 'gray', label: 'Closed', actions: [] }
+    PENDING: {
+      color: 'yellow',
+      label: 'Pending',
+      actions: ['APPROVED', 'CANCELLED'],
+      icon: 'clock'
+    },
+    APPROVED: {
+      color: 'green',
+      label: 'Approved',
+      actions: ['IN_PROGRESS', 'CANCELLED'],
+      icon: 'check'
+    },
+    IN_PROGRESS: {
+      color: 'blue',
+      label: 'In Progress',
+      actions: ['COMPLETED', 'CANCELLED'],
+      icon: 'play'
+    },
+    COMPLETED: {
+      color: 'purple',
+      label: 'Completed',
+      actions: ['CLOSED'],
+      icon: 'flag'
+    },
+    CANCELLED: {
+      color: 'red',
+      label: 'Cancelled',
+      actions: [],
+      icon: 'x'
+    },
+    CLOSED: {
+      color: 'gray',
+      label: 'Closed',
+      actions: [],
+      icon: 'archive'
+    }
   };
 
   // Lifecycle
@@ -62,27 +91,66 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
   };
 
   // Status update handler
+  const validateStatusTransition = (currentStatus, newStatus) => {
+    const workflow = window.CONSTANTS.workflow.projectManagement;
+    const allowedTransitions = workflow.transitions[currentStatus]?.allowedTo || [];
+    return allowedTransitions.includes(newStatus);
+  };
+
   const handleStatusUpdate = async (projectId, newStatus) => {
+    if (!window.CONSTANTS.PERMISSIONS.PROJECT.update?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      showMessage('Insufficient permissions', 'error');
+      return;
+    }
+
+    const project = projects.find(p => p.projectId === projectId);
+    if (!validateStatusTransition(project.status, newStatus)) {
+      showMessage('Invalid status transition', 'error');
+      return;
+    }
+
     setLoading(true);
-    google.script.run
-      .withSuccessHandler(function(result) {
-        setProjects(function(prevProjects) {
-          return prevProjects.map(function(project) {
-            return project.projectId === projectId ? 
-              { ...project, status: newStatus } : project;
-          });
+    
+    try {
+      await google.script.run
+        .withSuccessHandler(() => {
+          if (!mountedRef.current) return;
+          
+          // Log activity
+          google.script.run
+            .withFailureHandler(console.error)
+            .logActivity({
+              action: 'STATUS_CHANGE',
+              moduleType: 'PROJECT',
+              referenceId: projectId,
+              details: { 
+                oldStatus: project.status,
+                newStatus,
+                customerId: customer.customerId 
+              }
+            });
+
+          setProjects(prev => 
+            prev.map(p => p.projectId === projectId ? { ...p, status: newStatus } : p)
+          );
+          showMessage('Status updated successfully', 'success');
+        })
+        .withFailureHandler(error => {
+          if (!mountedRef.current) return;
+          showMessage(error.message || 'Failed to update status', 'error');
+        })
+        .updateProjectStatus({
+          projectId,
+          newStatus,
+          customerId: customer.customerId
         });
+    } finally {
+      if (mountedRef.current) {
         setLoading(false);
-      })
-      .withFailureHandler(function(error) {
-        setError(error);
-        setLoading(false);
-      })
-      .updateProjectStatus({
-        projectId: projectId,
-        newStatus: newStatus,
-        customerId: customer.customerId
-      });
+      }
+    }
   };
 
   // Filter projects based on status
@@ -93,12 +161,7 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
 
   // Calculate project metrics
   const projectMetrics = React.useMemo(() => {
-    return {
-      total: projects.length,
-      active: projects.filter(p => p.status === 'IN_PROGRESS').length,
-      completed: projects.filter(p => p.status === 'COMPLETED').length,
-      totalValue: projects.reduce((sum, p) => sum + (p.value || 0), 0)
-    };
+    return calculateMetrics(projects);
   }, [projects]);
 
   // Render methods
@@ -107,13 +170,15 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
       { title: 'Total Projects', value: projectMetrics.total },
       { title: 'Active Projects', value: projectMetrics.active },
       { title: 'Completed Projects', value: projectMetrics.completed },
+      { title: 'Pending Projects', value: projectMetrics.pending },
       { 
         title: 'Total Value', 
         value: new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD'
         }).format(projectMetrics.totalValue)
-      }
+      },
+      { title: 'Average Duration', value: `${projectMetrics.avgDuration.toFixed(2)} days` }
     ];
 
     return React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-4 mb-6' },
@@ -208,7 +273,22 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
                       }, action)
                     )
                   )
-                )
+                ),
+                React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                  React.createElement('div', { className: 'flex space-x-2' },
+                    checkModuleAccess(project.status).map(module =>
+                      React.createElement('button', {
+                        key: module,
+                        onClick: () => handleModuleNavigation(project.projectId, module),
+                        className: 'text-sm px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }, module)
+                    )
+                  )
+                ),
+                React.createElement(StatusBadge, {
+                  status: project.Status,
+                  key: `status-${project.ID}`
+                })
               )
             )
           )
@@ -269,5 +349,38 @@ function ProjectErrorBoundary(props) {
 }
 
 // Export to window
-window.CustomerProjects = CustomerProjects;
+if (typeof this !== 'undefined') {
+  this.CustomerProjects = CustomerProjects;
+}
+
+const checkModuleAccess = (status) => {
+  const workflow = window.CONSTANTS.workflow.projectManagement;
+  const allowedModules = workflow.moduleAccess[status] || [];
+  return allowedModules;
+};
+
+const StatusBadge = ({ status }) => {
+  const config = STATUS_CONFIG[status];
+  return React.createElement('span', {
+    className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+      bg-${config.color}-100 text-${config.color}-800`
+  }, [
+    React.createElement('span', {
+      className: `mr-1 ${config.icon}`
+    }),
+    config.label
+  ]);
+};
+
+const calculateMetrics = (projects) => {
+  return {
+    total: projects.length,
+    active: projects.filter(p => p.status === 'IN_PROGRESS').length,
+    completed: projects.filter(p => p.status === 'COMPLETED').length,
+    pending: projects.filter(p => p.status === 'PENDING').length,
+    totalValue: projects.reduce((sum, p) => sum + (Number(p.value) || 0), 0),
+    avgDuration: projects.length ? 
+      projects.reduce((sum, p) => sum + (p.duration || 0), 0) / projects.length : 0
+  };
+};
 </script>

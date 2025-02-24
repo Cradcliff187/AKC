@@ -1,6 +1,6 @@
 <script>
-// Initialize a ready state flag
-window.CONSTANTS = {
+// Initialize CONSTANTS globally first
+var CONSTANTS = {
   // Core Status Definitions
   ESTIMATE_STATUSES: {
     DRAFT: 'DRAFT',
@@ -57,12 +57,44 @@ window.CONSTANTS = {
       start: ['CREATOR', 'MANAGER', 'ADMIN'],
       complete: ['CREATOR', 'MANAGER', 'ADMIN'],
       cancel: ['MANAGER', 'ADMIN'],
-      close: ['MANAGER', 'ADMIN']
+      close: ['MANAGER', 'ADMIN'],
+      timeTracking: {
+        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
+        view: ['CREATOR', 'MANAGER', 'ADMIN']
+      },
+      materials: {
+        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
+        view: ['CREATOR', 'MANAGER', 'ADMIN']
+      },
+      subInvoices: {
+        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
+        view: ['CREATOR', 'MANAGER', 'ADMIN']
+      }
     },
     CUSTOMER: {
       view: ['CREATOR', 'MANAGER', 'ADMIN'],
       edit: ['MANAGER', 'ADMIN'],
-      delete: ['ADMIN']
+      delete: ['ADMIN'],
+      create: ['MANAGER', 'ADMIN'],
+      update: ['MANAGER', 'ADMIN'],
+      financials: {
+        view: ['MANAGER', 'ADMIN']
+      },
+      communications: {
+        view: ['CREATOR', 'MANAGER', 'ADMIN'],
+        send: ['MANAGER', 'ADMIN']
+      },
+      documents: {
+        view: ['CREATOR', 'MANAGER', 'ADMIN'],
+        upload: ['MANAGER', 'ADMIN'],
+        delete: ['ADMIN']
+      },
+      contacts: {
+        view: ['CREATOR', 'MANAGER', 'ADMIN'],
+        create: ['MANAGER', 'ADMIN'],
+        update: ['MANAGER', 'ADMIN'],
+        delete: ['ADMIN']
+      }
     }
   },
 
@@ -108,7 +140,7 @@ window.CONSTANTS = {
   validate: {
     estimate: function(data) {
       var errors = [];
-      var rules = window.CONSTANTS.VALIDATION_RULES.ESTIMATE;
+      var rules = CONSTANTS.VALIDATION_RULES.ESTIMATE;
       
       if (!data.amount || data.amount < rules.amount.min) {
         errors.push('Invalid amount');
@@ -127,7 +159,7 @@ window.CONSTANTS = {
     },
     project: function(data) {
       var errors = [];
-      var rules = window.CONSTANTS.VALIDATION_RULES.PROJECT;
+      var rules = CONSTANTS.VALIDATION_RULES.PROJECT;
       
       if (!data.startDate && rules.startDate.required) {
         errors.push('Start date is required');
@@ -141,8 +173,43 @@ window.CONSTANTS = {
         errors: errors
       };
     }
+  },
+
+  // Add missing error messages
+  ERROR_MESSAGES: {
+    INITIALIZATION_FAILED: 'Application failed to initialize',
+    SESSION_INVALID: 'Your session has expired. Please refresh the page.',
+    SYSTEM_ERROR: 'An unexpected error occurred',
+    REACT_NOT_LOADED: 'Required resources not loaded'
+  },
+
+  // Add missing address validation config
+  ADDRESS_VALIDATION: {
+    TIMEOUT: 10000,
+    REQUIRED_FIELDS: ['street1', 'city', 'state', 'zip'],
+    TYPES: {
+      CUSTOMER: 'CUSTOMER',
+      PROJECT: 'PROJECT',
+      BILLING: 'BILLING'
+    },
+    STRICT_MODE: true
   }
 };
+
+// Single export pattern
+if (typeof this !== 'undefined') {
+  this.CONSTANTS = CONSTANTS;
+}
+
+// Add a function to access constants safely
+function getConstants() {
+  return CONSTANTS;
+}
+
+// For client-side scripts, add compatibility layer
+if (typeof window !== 'undefined') {
+  window.CONSTANTS = CONSTANTS;
+}
 
 // Constants verification
 window.addEventListener('DOMContentLoaded', function() {
@@ -156,7 +223,7 @@ window.addEventListener('DOMContentLoaded', function() {
   ];
   
   var missingConstants = requiredConstants.filter(function(constant) {
-    return !window.CONSTANTS[constant];
+    return !CONSTANTS[constant];
   });
   
   if (missingConstants.length > 0) {

@@ -40,26 +40,39 @@ const CustomerEstimatesManager = ({ customer, onBack }) => {
   };
 
   const handleStatusChange = async (estimateId, newStatus, currentStatus) => {
-    if (!mountedRef.current) return;
-    
-    if (!EstimateStatusManager.validateTransition(currentStatus, newStatus)) {
-      showMessage('Invalid status transition', 'error');
+    if (!window.CONSTANTS.PERMISSIONS.ESTIMATES.update?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      showMessage('Insufficient permissions', 'error');
       return;
     }
   
     setState(prev => ({ ...prev, loading: true }));
   
     try {
-      await EstimateStatusManager.executeTransition(
-        estimateId,
-        newStatus,
-        currentStatus
-      );
-      
-      showMessage('Status updated successfully', 'success');
-      loadEstimates();
-    } catch (error) {
-      showMessage(error.message || 'Status update failed', 'error');
+      await google.script.run
+        .withSuccessHandler(() => {
+          loadEstimates();
+          showMessage('Status updated successfully', 'success');
+        })
+        .withFailureHandler(error => {
+          showMessage(error.message || 'Failed to update status', 'error');
+        })
+        .updateEstimateStatusForClient({
+          estimateId,
+          newStatus,
+          currentStatus,
+          projectId: customer.CustomerID
+        });
+  
+      // Log activity
+      await google.script.run
+        .logActivity({
+          action: 'STATUS_CHANGE',
+          moduleType: 'ESTIMATE',
+          referenceId: estimateId,
+          details: { oldStatus: currentStatus, newStatus }
+        });
     } finally {
       setState(prev => ({ ...prev, loading: false }));
     }
@@ -91,33 +104,73 @@ const CustomerEstimatesManager = ({ customer, onBack }) => {
       });
   };
 
+  const sendEstimateEmail = async (estimate) => {
+    const template = window.CONSTANTS.TEMPLATES.ESTIMATE.COMMUNICATION.ESTIMATE_FOLLOWUP;
+    
+    setState(prev => ({ ...prev, loading: true }));
+    
+    try {
+      await google.script.run
+        .withSuccessHandler(() => {
+          showMessage('Estimate sent successfully', 'success');
+        })
+        .withFailureHandler(error => {
+          showMessage(error.message || 'Failed to send estimate', 'error');
+        })
+        .sendEstimateEmail({
+          estimateId: estimate.EstimateID,
+          templateId: template,
+          customerId: customer.CustomerID
+        });
+    } finally {
+      setState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   const EstimateForm = ({ estimate, onSubmit, onCancel }) => {
     const [formData, setFormData] = React.useState(estimate || {
       Description: '',
       EstimatedAmount: '',
+      ContingencyAmount: '',
+      ScopeItemsJSON: JSON.stringify([]),
       ValidUntil: '',
       Notes: ''
     });
+
+    const [scopeItems, setScopeItems] = React.useState([]);
+
+    const addScopeItem = () => {
+      setScopeItems([...scopeItems, {
+        itemService: '',
+        description: '',
+        qtyHours: '',
+        rate: '',
+        amount: 0
+      }]);
+    };
+
+    const updateScopeItem = (index, field, value) => {
+      const newItems = [...scopeItems];
+      newItems[index] = { ...newItems[index], [field]: value };
+      if (field === 'qtyHours' || field === 'rate') {
+        newItems[index].amount = newItems[index].qtyHours * newItems[index].rate;
+      }
+      setScopeItems(newItems);
+      setFormData(prev => ({
+        ...prev,
+        EstimatedAmount: newItems.reduce((sum, item) => sum + (item.amount || 0), 0),
+        ScopeItemsJSON: JSON.stringify(newItems)
+      }));
+    };
 
     return React.createElement('form', {
       onSubmit: (e) => {
         e.preventDefault();
         onSubmit(formData);
       },
-      className: 'space-y-4 bg-white p-6 rounded-lg shadow'
+      className: 'space-y-6'
     }, [
-      React.createElement('div', null, [
-        React.createElement('label', {
-          className: 'block text-sm font-medium text-gray-700'
-        }, 'Description'),
-        React.createElement('input', {
-          type: 'text',
-          value: formData.Description,
-          onChange: e => setFormData(prev => ({ ...prev, Description: e.target.value })),
-          required: true,
-          className: 'mt-1 block w-full rounded-md border-gray-300 shadow-sm'
-        })
-      ]),
+      // Form fields based on blueprint estimate schema
     ]);
   };
 
@@ -239,5 +292,52 @@ const formatCurrency = amount => {
   }).format(amount);
 };
 
-window.CustomerEstimatesManager = CustomerEstimatesManager;
+const STATUS_CONFIG = {
+  DRAFT: {
+    color: 'gray',
+    icon: '📝',
+    label: 'Draft',
+    actions: ['PENDING', 'CANCELLED']
+  },
+  PENDING: {
+    color: 'yellow',
+    icon: '⏳',
+    label: 'Pending Review',
+    actions: ['APPROVED', 'REJECTED', 'CANCELLED']
+  },
+  APPROVED: {
+    color: 'green',
+    icon: '✓',
+    label: 'Approved',
+    actions: ['COMPLETED', 'CANCELLED']
+  },
+  REJECTED: {
+    color: 'red',
+    icon: '✕',
+    label: 'Rejected',
+    actions: ['DRAFT', 'CANCELLED']
+  },
+  COMPLETED: {
+    color: 'blue',
+    icon: '🏁',
+    label: 'Completed',
+    actions: ['CLOSED']
+  },
+  CANCELLED: {
+    color: 'gray',
+    icon: '⃠',
+    label: 'Cancelled',
+    actions: []
+  },
+  CLOSED: {
+    color: 'purple',
+    icon: '🔒',
+    label: 'Closed',
+    actions: []
+  }
+};
+
+if (typeof this !== 'undefined') {
+  this.CustomerEstimatesManager = CustomerEstimatesManager;
+}
 </script>

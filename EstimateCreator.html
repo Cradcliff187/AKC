@@ -29,9 +29,67 @@ const validateCustomerResponse = (data) => {
   return true;
 };
 
+// Missing proper status validation
 const validateStatusTransition = (currentStatus, newStatus) => {
-  const allowedTransitions = workflow.estimateManagement.transitions[currentStatus];
-  return allowedTransitions?.includes(newStatus);
+  const workflow = window.CONSTANTS.workflow.estimateManagement;
+  return workflow.transitions[currentStatus?.includes(newStatus)];
+};
+
+// Add Status Management Service
+const EstimateStatusManager = {
+  validateTransition: (currentStatus, newStatus) => {
+    return validateStatusTransition(currentStatus, newStatus);
+  },
+  
+  executeTransition: async (estimateId, newStatus, currentStatus) => {
+    // Execute hooks from blueprint
+    await executeBeforeTransitionHooks(estimateId, currentStatus, newStatus);
+    
+    const result = await google.script.run
+      .withSuccessHandler(response => response)
+      .withFailureHandler(error => { throw error; })
+      .updateEstimateStatusForClient({
+        estimateId,
+        newStatus,
+        currentStatus
+      });
+      
+    await executeAfterTransitionHooks(estimateId, currentStatus, newStatus);
+    return result;
+  }
+};
+
+const logActivity = async (action, details) => {
+  await google.script.run
+    .withSuccessHandler(() => {})
+    .withFailureHandler(error => console.error('Activity log error:', error))
+    .logActivity({
+      action,
+      moduleType: 'ESTIMATE',
+      referenceId: estimateId,
+      details
+    });
+};
+
+const validateEstimateData = (data) => {
+  const requiredFields = [
+    'customerId',
+    'projectName',
+    'scopeOfWork',
+    'estimatedAmount'
+  ];
+
+  const missing = requiredFields.filter(field => !data[field]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required fields: ${missing.join(', ')}`);
+  }
+
+  // Validate amount
+  if (parseFloat(data.estimatedAmount) <= 0) {
+    throw new Error('Estimate amount must be greater than zero');
+  }
+
+  return true;
 };
 
 const EstimateEmailDialog = ({
@@ -270,7 +328,7 @@ const EstimateActions = ({ onSubmit, disabled, loading }) => {
   );
 };
 
-const EstimateCreator = () => {
+const EstimateCreator = ({ onBack }) => {
   // Log component load
   console.log("EstimateCreator component instantiated.");
 
@@ -1137,7 +1195,7 @@ const EstimateCreator = () => {
   };
 
   // Main render – wraps the existing content and adds the Email Dialog
-  return React.createElement('div', null,
+  return React.createElement('div', null, [
     React.createElement('div', { className: 'max-w-2xl mx-auto p-4' },
       React.createElement('div', { className: 'bg-white shadow rounded-lg p-6' },
         React.createElement('h2', { className: 'text-2xl font-bold mb-4' }, 'Create Estimate'),
@@ -1161,11 +1219,66 @@ const EstimateCreator = () => {
       estimate: currentEstimate,
       onSend: handleSendEmail,
       defaultEmail: customerData.email || ''
+    }),
+    React.createElement(StatusBadge, {
+      status: estimate.Status,
+      key: `status-${estimate.ID}`
     })
-  );
+  ]);
 };
 
+// Export for window
+if (typeof this !== 'undefined') {
+  this.EstimateCreator = EstimateCreator;
+}
+
 const ESTIMATE_WORKFLOW = JSON.parse('{"steps":["customerSelection","projectDetails","estimateDetails","review"],"allowBack":true,"validateStep":true}');
+
+const WORKFLOW_STEPS = {
+  customerSelection: {
+    order: 1,
+    validate: validateCustomerData,
+    next: 'projectDetails'
+  },
+  projectDetails: {
+    order: 2,
+    validate: validateProjectData,
+    next: 'estimateDetails'
+  },
+  estimateDetails: {
+    order: 3,
+    validate: validateEstimateData,
+    next: 'review'
+  },
+  review: {
+    order: 4,
+    validate: () => true,
+    isLast: true
+  }
+};
+
+const STATUS_DISPLAY = {
+  DRAFT: {
+    color: 'gray',
+    icon: 'edit',
+    label: 'Draft'
+  },
+  PENDING: {
+    color: 'yellow',
+    icon: 'clock',
+    label: 'Pending Review'
+  },
+  APPROVED: {
+    color: 'green',
+    icon: 'check',
+    label: 'Approved'
+  },
+  REJECTED: {
+    color: 'red',
+    icon: 'x',
+    label: 'Rejected'
+  }
+};
 
 window.EstimateCreator = EstimateCreator;
 </script>

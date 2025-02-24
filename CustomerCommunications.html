@@ -1,4 +1,123 @@
 <script>
+const STATUS_CONFIG = {
+  DRAFT: {
+    color: 'gray',
+    label: 'Draft',
+    actions: ['SENT']
+  },
+  SENT: {
+    color: 'blue',
+    label: 'Sent',
+    actions: ['DELIVERED']
+  },
+  DELIVERED: {
+    color: 'green',
+    label: 'Delivered',
+    actions: ['READ']
+  },
+  READ: {
+    color: 'purple',
+    label: 'Read',
+    actions: ['REPLIED']
+  },
+  REPLIED: {
+    color: 'indigo',
+    label: 'Replied',
+    actions: []
+  },
+  FAILED: {
+    color: 'red',
+    label: 'Failed',
+    actions: ['DRAFT']
+  }
+};
+
+const CommunicationTemplates = {
+  ESTIMATE_FOLLOWUP: {
+    subject: 'Follow-up: Estimate #{estimateId}',
+    content: `Dear {customerName},
+
+We wanted to follow up regarding estimate #{estimateId} sent on {dateSent}.
+
+{customContent}
+
+Best regards,
+{senderName}`
+  },
+  PAYMENT_REMINDER: {
+    subject: 'Payment Reminder: Invoice #{invoiceId}',
+    content: `Dear {customerName},
+
+This is a friendly reminder that invoice #{invoiceId} for {amount} is due on {dueDate}.
+
+{customContent}
+
+Best regards,
+{senderName}`
+  },
+  STATUS_UPDATE: {
+    subject: 'Project Status Update: {projectName}',
+    content: `Dear {customerName},
+
+Here's an update on your project: {projectName}
+
+{customContent}
+
+Best regards,
+{senderName}`
+  }
+};
+
+const MessageForm = ({ onSubmit, onCancel, initialData = {} }) => {
+  const [formData, setFormData] = React.useState({
+    type: initialData.type || window.CONSTANTS.CUSTOMER_MODULE.DOCUMENT_TYPES.COMMUNICATION,
+    subject: initialData.subject || '',
+    content: initialData.content || '',
+    sentTo: initialData.sentTo || customer.contactEmail,
+    status: window.CONSTANTS.COMMUNICATION_STATUSES.DRAFT,
+    channel: initialData.channel || customer.preferredChannel || 'EMAIL',
+    priority: initialData.priority || 'NORMAL',
+    template: initialData.template || ''
+  });
+
+  const handleTemplateSelect = (templateId) => {
+    const template = CommunicationTemplates[templateId];
+    if (template) {
+      setFormData(prev => ({
+        ...prev,
+        subject: template.subject,
+        content: template.content
+      }));
+    }
+  };
+
+  return React.createElement('form', {
+    onSubmit: (e) => {
+      e.preventDefault();
+      onSubmit(formData);
+    },
+    className: 'space-y-4'
+  }, [
+    // Template selector
+    React.createElement('div', null, [
+      React.createElement('label', {
+        className: 'block text-sm font-medium text-gray-700'
+      }, 'Template'),
+      React.createElement('select', {
+        value: formData.template,
+        onChange: (e) => handleTemplateSelect(e.target.value),
+        className: 'mt-1 block w-full rounded-md border-gray-300 shadow-sm'
+      }, [
+        React.createElement('option', { value: '' }, 'Select a template...'),
+        Object.keys(CommunicationTemplates).map(key =>
+          React.createElement('option', { key, value: key }, key)
+        )
+      ])
+    ]),
+    // ... other form fields
+  ]);
+};
+
 const CustomerCommunications = ({ customer, showMessage }) => {
   const [state, setState] = React.useState({
     communications: [],
@@ -57,31 +176,57 @@ const CustomerCommunications = ({ customer, showMessage }) => {
       .getCustomerCommunications(customer.CustomerID);
   };
 
-  const handleSendMessage = (messageData) => {
+  const logCommunicationActivity = async (action, details) => {
+    await google.script.run
+      .withFailureHandler(error => console.error('Activity log error:', error))
+      .logActivity({
+        action,
+        moduleType: 'CUSTOMER_COMMUNICATIONS',
+        referenceId: customer.CustomerID,
+        details: {
+          ...details,
+          timestamp: new Date().toISOString()
+        }
+      });
+  };
+
+  const handleSendMessage = async (messageData) => {
     if (!mountedRef.current) return;
     setState(prev => ({ ...prev, loading: true }));
 
-    google.script.run
-      .withSuccessHandler(() => {
-        if (!mountedRef.current) return;
-        loadCommunications();
-        setState(prev => ({
-          ...prev,
-          showNewMessageForm: false,
-          newMessage: { ...state.newMessage, subject: '', content: '' }
-        }));
-        showMessage('Message sent successfully', 'success');
-      })
-      .withFailureHandler(error => {
-        if (!mountedRef.current) return;
-        setState(prev => ({ ...prev, loading: false }));
-        showMessage(error.message || 'Failed to send message', 'error');
-      })
-      .sendCustomerCommunication({
-        ...messageData,
-        CustomerID: customer.CustomerID,
-        CreatedBy: Session.getActiveUser().getEmail()
-      });
+    try {
+      await google.script.run
+        .withSuccessHandler(() => {
+          if (!mountedRef.current) return;
+          loadCommunications();
+          setState(prev => ({
+            ...prev,
+            showNewMessageForm: false,
+            newMessage: { ...state.newMessage, subject: '', content: '' }
+          }));
+          
+          // Log activity
+          logCommunicationActivity('SEND_COMMUNICATION', {
+            type: messageData.type,
+            subject: messageData.subject,
+            recipient: messageData.sentTo
+          });
+          
+          showMessage('Message sent successfully', 'success');
+        })
+        .withFailureHandler(error => {
+          throw error;
+        })
+        .sendCustomerCommunication({
+          ...messageData,
+          CustomerID: customer.CustomerID,
+          CreatedBy: Session.getActiveUser().getEmail()
+        });
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setState(prev => ({ ...prev, loading: false }));
+      showMessage(error.message || 'Failed to send message', 'error');
+    }
   };
 
   return React.createElement('div', { className: 'space-y-6' }, [

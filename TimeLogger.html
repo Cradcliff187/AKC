@@ -1,5 +1,5 @@
 <script>
-const TimeLogger = () => {
+const TimeLogger = ({ onBack }) => {
   const [date, setDate] = React.useState(() => {
     try {
       return google.script.run.withSuccessHandler(d => setDate(d)).getTodayDate();
@@ -18,9 +18,41 @@ const TimeLogger = () => {
   const mountedRef = React.useRef(true);
 
   React.useEffect(() => {
+    if (!window.CONSTANTS.PERMISSIONS.PROJECT.timeTracking?.submit?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      showMessage('Insufficient permissions', 'error');
+      return;
+    }
+    
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  const validateProjectStatus = (project) => {
+    const allowedStatuses = ['APPROVED', 'IN_PROGRESS'];
+    return allowedStatuses.includes(project.status);
+  };
+
+  const filterActiveProjects = (projects) => {
+    return projects.filter(project => validateProjectStatus(project));
+  };
+
+  const validateTimeEntry = (date, start, end) => {
+    const startDate = new Date(`${date} ${start}`);
+    const endDate = new Date(`${date} ${end}`);
+    const diffHours = (endDate - startDate) / (1000 * 60 * 60);
+    
+    if (diffHours <= 0) {
+      throw new Error('End time must be after start time');
+    }
+    
+    if (diffHours > 24) {
+      throw new Error('Time entry cannot exceed 24 hours');
+    }
+    
+    return true;
+  };
 
   // Fetch projects on mount
   React.useEffect(() => {
@@ -35,7 +67,7 @@ const TimeLogger = () => {
         });
         if (mountedRef.current) {
           if (response.success) {
-            setProjects(response.data);
+            setProjects(filterActiveProjects(response.data));
           } else {
             showMessage(response.error || 'Failed to load projects', 'error');
           }
@@ -87,22 +119,37 @@ const TimeLogger = () => {
     e.preventDefault();
     if (!mountedRef.current) return;
 
-    setLoading(true);
     try {
+      // Validate time entry
+      validateTimeEntry(date, startTime, endTime);
+      
+      // Validate project status
+      const project = projects.find(p => p.id === selectedProject);
+      if (!validateProjectStatus(project)) {
+        throw new Error('Cannot log time for inactive projects');
+      }
+
+      setLoading(true);
+      const timeLogData = {
+        date,
+        startTime,
+        endTime,
+        projectId: selectedProject,
+        forUserEmail,
+        hours
+      };
+
       const response = await new Promise(resolve => {
         google.script.run
           .withSuccessHandler(resolve)
           .withFailureHandler(err => resolve({ success: false, error: err.message }))
-          .submitTimeLog({
-            date,
-            startTime,
-            endTime,
-            projectId: selectedProject,
-            forUserEmail // pass new field
-          });
+          .submitTimeLog(timeLogData);
       });
+
       if (!mountedRef.current) return;
+
       if (response.success) {
+        await logTimeActivity(timeLogData);
         showMessage(
           `Time logged successfully! ${response.data.hours.toFixed(2)} hours recorded.`,
           'success'
@@ -111,17 +158,32 @@ const TimeLogger = () => {
           if (mountedRef.current) resetForm();
         }, 2000);
       } else {
-        showMessage(response.error || 'Failed to log time', 'error');
+        throw new Error(response.error || 'Failed to log time');
       }
     } catch (error) {
       if (mountedRef.current) {
-        showMessage('Failed to log time', 'error');
+        showMessage(error.message || 'Failed to log time', 'error');
       }
     } finally {
       if (mountedRef.current) {
         setLoading(false);
       }
     }
+  };
+
+  const logTimeActivity = async (timeLogData) => {
+    await google.script.run
+      .withFailureHandler(error => console.error('Activity log error:', error))
+      .logActivity({
+        action: 'TIME_LOG_SUBMIT',
+        moduleType: 'TIME_LOGS',
+        referenceId: timeLogData.projectId,
+        details: {
+          hours: timeLogData.hours,
+          date: timeLogData.date,
+          forUserEmail: timeLogData.forUserEmail
+        }
+      });
   };
 
   const generateTimeOptions = () => {
@@ -146,13 +208,7 @@ const TimeLogger = () => {
     React.createElement('div', { className: 'bg-white shadow rounded-lg p-6' },
       React.createElement('h2', { className: 'text-2xl font-bold mb-4' }, 'Log Time'),
 
-      message.text && React.createElement('div', {
-        className: `mb-4 p-4 rounded ${
-          message.type === 'success'
-            ? 'bg-green-100 text-green-700'
-            : 'bg-red-100 text-red-700'
-        }`
-      }, message.text),
+      React.createElement(MessageAlert, { message }),
 
       React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-4' },
         // Date
@@ -236,5 +292,23 @@ const TimeLogger = () => {
       )
     )
   );
+};
+
+if (typeof this !== 'undefined') {
+  this.TimeLogger = TimeLogger;
+}
+
+const MessageAlert = ({ message }) => {
+  if (!message.text) return null;
+  
+  const styles = {
+    success: 'bg-green-100 text-green-700 border-green-400',
+    error: 'bg-red-100 text-red-700 border-red-400',
+    warning: 'bg-yellow-100 text-yellow-700 border-yellow-400'
+  };
+
+  return React.createElement('div', {
+    className: `p-4 mb-4 rounded border ${styles[message.type] || styles.error}`
+  }, message.text);
 };
 </script>

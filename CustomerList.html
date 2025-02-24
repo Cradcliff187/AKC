@@ -45,22 +45,32 @@ const CustomerList = ({
   };
 
   // Status badge component
-  const StatusBadge = ({ status }) => {
-    const config = window.CONSTANTS.STATUS_CONFIG.CUSTOMER[status] || {
-      color: 'gray',
-      icon: 'circle',
-      label: status
-    };
+  const StatusBadge = ({ status, onStatusChange, disabled }) => {
+    const config = CustomerStatusManager.getStatusConfig(status);
+    const workflow = window.CONSTANTS.workflow.customerManagement;
+    const transitions = workflow.transitions[status] || [];
 
-    return React.createElement('span', {
-      className: `px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                 bg-${config.color}-100 text-${config.color}-800`
-    }, [
+    return React.createElement('div', { className: 'relative' }, [
       React.createElement('span', {
-        key: 'icon',
-        className: 'mr-1'
-      }, config.icon),
-      config.label
+        className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+          bg-${config.color}-100 text-${config.color}-800`
+      }, [
+        React.createElement('span', {
+          className: `mr-1 ${config.icon}`
+        }),
+        status
+      ]),
+      hasPermission('update') && !disabled && transitions.length > 0 && 
+      React.createElement('select', {
+        onChange: (e) => onStatusChange(e.target.value),
+        className: 'ml-2 text-sm border rounded',
+        value: ''
+      }, [
+        React.createElement('option', { value: '' }, 'Change Status'),
+        ...transitions.map(newStatus =>
+          React.createElement('option', { value: newStatus }, newStatus)
+        )
+      ])
     ]);
   };
 
@@ -70,6 +80,43 @@ const CustomerList = ({
       return;
     }
     onSelectCustomer(customer);
+  };
+
+  const handleStatusChange = async (customerId, newStatus, currentStatus) => {
+    if (!hasPermission('update')) {
+      showMessage('Insufficient permissions to update status', 'error');
+      return;
+    }
+  
+    if (!CustomerStatusManager.validateTransition(currentStatus, newStatus)) {
+      showMessage('Invalid status transition', 'error');
+      return;
+    }
+  
+    try {
+      await google.script.run
+        .withSuccessHandler(() => {
+          showMessage('Status updated successfully', 'success');
+          if (onFilterChange) {
+            onFilterChange({ status: statusFilter, valueRange: valueRangeFilter });
+          }
+        })
+        .withFailureHandler(error => {
+          showMessage(error.message || 'Failed to update status', 'error');
+        })
+        .updateCustomerStatus({
+          customerId,
+          newStatus,
+          currentStatus
+        });
+  
+      await logCustomerActivity('STATUS_CHANGE', customerId, {
+        oldStatus: currentStatus,
+        newStatus
+      });
+    } catch (error) {
+      showMessage('Failed to update status', 'error');
+    }
   };
 
   return React.createElement('div', { className: 'space-y-4' }, [
@@ -104,6 +151,9 @@ const CustomerList = ({
       ])
     ]),
 
+    // Customer Metrics
+    React.createElement(CustomerMetrics, { customers }),
+
     // Customer Table
     React.createElement('div', { 
       className: 'bg-white shadow overflow-hidden sm:rounded-lg' 
@@ -137,7 +187,10 @@ const CustomerList = ({
               customer.CustomerName
             ),
             React.createElement('td', { className: 'px-6 py-4' },
-              React.createElement(StatusBadge, { status: customer.Status })
+              React.createElement(StatusBadge, {
+                status: customer.Status,
+                key: `status-${customer.CustomerID}`
+              })
             ),
             React.createElement('td', { className: 'px-6 py-4' }, [
               React.createElement('button', {
@@ -158,5 +211,81 @@ const CustomerList = ({
   ]);
 };
 
-window.CustomerList = CustomerList;
+const CustomerStatusManager = {
+  validateTransition: (currentStatus, newStatus) => {
+    const workflow = window.CONSTANTS.workflow.customerManagement;
+    return workflow.transitions[currentStatus]?.includes(newStatus);
+  },
+
+  getStatusConfig: (status) => {
+    const workflow = window.CONSTANTS.workflow.customerManagement;
+    return workflow.statusDisplay[status] || {
+      color: 'gray',
+      icon: 'circle'
+    };
+  }
+};
+
+const logCustomerActivity = async (action, customerId, details) => {
+  await google.script.run
+    .withFailureHandler(error => console.error('Activity log error:', error))
+    .logActivity({
+      action,
+      moduleType: 'CUSTOMER',
+      referenceId: customerId,
+      details
+    });
+};
+
+const CustomerMetrics = ({ customers }) => {
+  const metrics = {
+    total: customers.length,
+    active: customers.filter(c => c.Status === 'ACTIVE').length,
+    totalRevenue: customers.reduce((sum, c) => sum + (Number(c.TotalRevenue) || 0), 0)
+  };
+
+  return React.createElement('div', {
+    className: 'grid grid-cols-3 gap-4 mb-6'
+  }, [
+    {
+      label: 'Total Customers',
+      value: metrics.total,
+      color: 'blue'
+    },
+    {
+      label: 'Active Customers',
+      value: metrics.active,
+      color: 'green'
+    },
+    {
+      label: 'Total Revenue',
+      value: new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(metrics.totalRevenue),
+      color: 'purple'
+    }
+  ].map(metric =>
+    React.createElement('div', {
+      key: metric.label,
+      className: `bg-${metric.color}-50 p-4 rounded-lg`
+    }, [
+      React.createElement('div', {
+        className: 'text-sm text-gray-600'
+      }, metric.label),
+      React.createElement('div', {
+        className: `text-xl font-semibold text-${metric.color}-700`
+      }, metric.value)
+    ])
+  ));
+};
+
+// Export for window
+if (typeof window !== 'undefined') {
+  window.CustomerList = CustomerList;
+}
+
+if (typeof this !== 'undefined') {
+  this.CustomerList = CustomerList;
+}
 </script>

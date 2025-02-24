@@ -1,6 +1,13 @@
 <script>
 class AddressValidator {
-  static validateAddress(address) {
+  static CONFIG = {
+    TIMEOUT: window.CONSTANTS.ADDRESS_VALIDATION.TIMEOUT || 10000,
+    REQUIRED_COMPONENTS: window.CONSTANTS.ADDRESS_VALIDATION.REQUIRED_FIELDS,
+    VALIDATION_TYPES: window.CONSTANTS.ADDRESS_VALIDATION.TYPES,
+    FORMAT: window.CONSTANTS.ADDRESS_VALIDATION.FORMAT
+  };
+
+  static validateAddress(address, type = 'DEFAULT') {
     return new Promise((resolve, reject) => {
       if (!window.MAPS_API || !window.MAPS_API.initialized) {
         reject(new Error('Maps API not initialized'));
@@ -9,56 +16,153 @@ class AddressValidator {
 
       const timeoutId = setTimeout(() => {
         reject(new Error('Address validation timed out'));
-      }, 10000);
+      }, this.CONFIG.TIMEOUT);
 
       window.MAPS_API.geocoder.geocode({ address }, (results, status) => {
         clearTimeout(timeoutId);
-
-        if (status === 'ZERO_RESULTS') {
-          reject(new Error('Address not found'));
-          return;
-        }
-
-        if (status !== 'OK' || !results[0]) {
-          reject(new Error(`Address validation failed: ${status}`));
-          return;
-        }
-
-        const result = results[0];
-        const components = {};
         
-        result.address_components.forEach(component => {
-          const type = component.types[0];
-          if (type === 'street_number') {
-            components.street = component.long_name;
-          } else if (type === 'route') {
-            components.street = `${components.street || ''} ${component.long_name}`.trim();
-          } else if (type === 'locality') {
-            components.city = component.long_name;
-          } else if (type === 'administrative_area_level_1') {
-            components.state = component.short_name;
-          } else if (type === 'postal_code') {
-            components.zip = component.long_name;
-          }
-        });
-
-        if (!window.ADDRESS_UTILS.validateAddressComponents(components)) {
-          reject(new Error('Invalid address components'));
-          return;
+        try {
+          const validatedAddress = this._processGeocodeResponse(results, status);
+          this._logValidation(address, validatedAddress, type);
+          resolve(validatedAddress);
+        } catch (error) {
+          this._logValidationError(address, error);
+          reject(error);
         }
-
-        resolve({
-          ...components,
-          formatted: result.formatted_address,
-          coordinates: {
-            lat: result.geometry.location.lat(),
-            lng: result.geometry.location.lng()
-          }
-        });
       });
     });
+  }
+
+  static _processGeocodeResponse(results, status) {
+    if (status === 'ZERO_RESULTS') {
+      throw new Error('Address not found');
+    }
+
+    if (status !== 'OK' || !results[0]) {
+      throw new Error(`Address validation failed: ${status}`);
+    }
+
+    const result = results[0];
+    const components = this._extractComponents(result.address_components);
+    
+    if (!this._validateComponents(components)) {
+      throw new Error('Missing required address components');
+    }
+
+    return {
+      ...components,
+      formatted: result.formatted_address,
+      coordinates: {
+        lat: result.geometry.location.lat(),
+        lng: result.geometry.location.lng()
+      }
+    };
+  }
+
+  static _extractComponents(addressComponents) {
+    const components = {};
+    
+    addressComponents.forEach(component => {
+      const type = component.types[0];
+      switch (type) {
+        case 'street_number':
+          components.street_number = component.long_name;
+          break;
+        case 'route':
+          components.street = component.long_name;
+          break;
+        case 'locality':
+          components.city = component.long_name;
+          break;
+        case 'administrative_area_level_1':
+          components.state = component.short_name;
+          break;
+        case 'postal_code':
+          components.zip = component.long_name;
+          break;
+        case 'subpremise':
+          components.unit = component.long_name;
+          break;
+      }
+    });
+
+    // Format street address according to blueprint
+    if (components.street_number && components.street) {
+      components.street1 = `${components.street_number} ${components.street}`;
+      delete components.street_number;
+      delete components.street;
+    }
+
+    if (components.unit) {
+      components.street2 = `Unit ${components.unit}`;
+      delete components.unit;
+    }
+
+    return components;
+  }
+
+  static _validateComponents(components) {
+    return this.CONFIG.REQUIRED_COMPONENTS.every(field => {
+      switch (field) {
+        case 'street1':
+          return components.street1 && components.street1.length > 0;
+        case 'city':
+          return components.city && components.city.length > 0;
+        case 'state':
+          return components.state && components.state.length === 2;
+        case 'zip':
+          return components.zip && /^\d{5}(-\d{4})?$/.test(components.zip);
+        default:
+          return true;
+      }
+    });
+  }
+
+  static async _logValidation(originalAddress, validatedAddress, type) {
+    try {
+      await google.script.run
+        .withFailureHandler(console.error)
+        .logActivity({
+          action: 'ADDRESS_VALIDATION',
+          moduleType: 'ADDRESS',
+          details: {
+            type,
+            originalAddress,
+            validatedAddress,
+            timestamp: new Date().toISOString()
+          }
+        });
+    } catch (error) {
+      console.error('Failed to log address validation:', error);
+    }
+  }
+
+  static async _logValidationError(address, error) {
+    try {
+      await google.script.run
+        .withFailureHandler(console.error)
+        .logActivity({
+          action: 'ADDRESS_VALIDATION_ERROR',
+          moduleType: 'ADDRESS',
+          details: {
+            address,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          }
+        });
+    } catch (logError) {
+      console.error('Failed to log validation error:', logError);
+    }
   }
 }
 
 window.AddressValidator = AddressValidator;
+
+const AddressValidator = ({ address, onValidated }) => {
+  // ...existing code...
+};
+
+if (typeof this !== 'undefined') {
+  this.AddressValidator = AddressValidator;
+}
 </script>

@@ -1,9 +1,171 @@
 <script>
 const SubInvoice = ({ projectId, onBack }) => {
+  const [state, setState] = React.useState({
+    loading: false,
+    error: null,
+    success: null,
+    subcontractors: [],
+    invoices: [],
+    form: {
+      ProjectName: '',
+      SubID: '',
+      SubName: '',
+      InvoiceAmount: '',
+      InvoiceDocURL: '',
+      fileUpload: null
+    }
+  });
+
+  const mountedRef = React.useRef(true);
+
+  React.useEffect(() => {
+    if (!window.CONSTANTS.PERMISSIONS.PROJECT.subInvoices?.submit?.includes(
+      window.CONSTANTS.USER_ROLE
+    )) {
+      setState(prev => ({ ...prev, error: 'Insufficient permissions' }));
+      return;
+    }
+    loadSubcontractors();
+    loadExistingInvoices();
+    
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [projectId]);
+
   // Local state for form management
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filteredInvoices, setFilteredInvoices] = React.useState([]);
   const [selectedInvoice, setSelectedInvoice] = React.useState(null);
+
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      setState(prev => ({
+        ...prev,
+        error: 'Invalid file type. Please upload PDF or images only.'
+      }));
+      return;
+    }
+  
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setState(prev => ({
+        ...prev,
+        error: 'File size exceeds 10MB limit'
+      }));
+      return;
+    }
+  
+    setState(prev => ({ ...prev, loading: true }));
+  
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Data = e.target.result.split(',')[1];
+        
+        const response = await google.script.run
+          .withSuccessHandler(result => {
+            if (!mountedRef.current) return;
+            setState(prev => ({
+              ...prev,
+              form: {
+                ...prev.form,
+                InvoiceDocURL: result.url
+              },
+              loading: false
+            }));
+          })
+          .withFailureHandler(error => {
+            if (!mountedRef.current) return;
+            setState(prev => ({
+              ...prev,
+              error: error.message,
+              loading: false
+            }));
+          })
+          .uploadReceiptFile({
+            base64Data,
+            folderId: projectId,
+            fileType: file.type
+          });
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: 'Failed to upload file',
+        loading: false
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    const { form } = state;
+    if (!form.SubID || !form.InvoiceAmount) {
+      setState(prev => ({
+        ...prev,
+        error: 'Please fill in all required fields'
+      }));
+      return;
+    }
+  
+    setState(prev => ({ ...prev, loading: true }));
+  
+    try {
+      await google.script.run
+        .withSuccessHandler(() => {
+          if (!mountedRef.current) return;
+          
+          // Log activity
+          google.script.run.logActivity({
+            action: 'SUBMIT_INVOICE',
+            moduleType: 'SUBINVOICES',
+            referenceId: projectId,
+            details: {
+              subId: form.SubID,
+              amount: form.InvoiceAmount
+            }
+          });
+  
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            success: 'Invoice submitted successfully',
+            form: {
+              ProjectName: '',
+              SubID: '',
+              SubName: '',
+              InvoiceAmount: '',
+              InvoiceDocURL: '',
+              fileUpload: null
+            }
+          }));
+        })
+        .withFailureHandler(error => {
+          if (!mountedRef.current) return;
+          setState(prev => ({
+            ...prev,
+            error: error.message,
+            loading: false
+          }));
+        })
+        .submitSubInvoice({
+          ProjectID: projectId,
+          ...form
+        });
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: 'Failed to submit invoice',
+        loading: false
+      }));
+    }
+  };
 
   return React.createElement('div', { className: 'space-y-6' }, [
     // Header Section
@@ -25,7 +187,8 @@ const SubInvoice = ({ projectId, onBack }) => {
     }, [
       // Form fields matching blueprint SUBINVOICES schema
       React.createElement('form', {
-        className: 'space-y-4'
+        className: 'space-y-4',
+        onSubmit: handleSubmit
       }, [
         React.createElement('input', {
           type: 'text',
@@ -76,5 +239,20 @@ const SubInvoice = ({ projectId, onBack }) => {
   ]);
 };
 
-window.SubInvoice = SubInvoice;
+const MessageAlert = ({ type, message }) => {
+  if (!message) return null;
+  
+  const styles = {
+    error: 'bg-red-50 text-red-700 border-red-400',
+    success: 'bg-green-50 text-green-700 border-green-400'
+  };
+
+  return React.createElement('div', {
+    className: `p-4 mb-4 rounded border ${styles[type]}`
+  }, message);
+};
+
+if (typeof this !== 'undefined') {
+  this.SubInvoice = SubInvoice;
+}
 </script>

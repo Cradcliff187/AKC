@@ -1,246 +1,355 @@
 <script>
-const CustomerDetails = ({ customer, onViewEstimates, onViewProjects, showMessage }) => {
-  const [currentView, setCurrentView] = React.useState('details');
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editData, setEditData] = React.useState(null);
+const STATUS_CONFIG = {
+  validateTransition: (currentStatus, newStatus) => {
+    const workflow = window.CONSTANTS.workflow.customerManagement;
+    return workflow.transitions[currentStatus]?.includes(newStatus);
+  },
 
-  React.useEffect(() => {
-    if (customer) {
-      setEditData({
-        name: customer.name,
-        email: customer.email,
-        phone: customer.phone,
-        address: customer.address,
-        city: customer.city,
-        state: customer.state,
-        zip: customer.zip,
-        status: customer.status
-      });
-    }
-  }, [customer]);
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
-  const handleSave = async () => {
-    try {
-      const response = await new Promise(resolve => {
-        google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(err => resolve({ success: false, error: err.message }))
-          .updateCustomerDetails({
-            customerId: customer.customerId,
-            ...editData
-          });
-      });
-
-      if (response.success) {
-        showMessage('Customer details updated successfully', 'success');
-        setIsEditing(false);
-      } else {
-        showMessage(response.error || 'Failed to update customer details', 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to update customer details', 'error');
-    }
-  };
-
-  // Handle navigation tab click
-  const handleTabClick = (tab) => {
-    if (tab === 'estimates') {
-      if (onViewEstimates) {
-        onViewEstimates(customer);
-      } else {
-        setCurrentView('estimates');
-      }
-    } else if (tab === 'projects') {
-      if (onViewProjects) {
-        onViewProjects(customer);
-      } else {
-        setCurrentView('projects');
-      }
-    } else {
-      setCurrentView(tab);
-    }
-  };
-
-  const Navigation = () => {
-    const tabs = [
-      { id: 'details', label: 'Details' },
-      { id: 'estimates', label: 'Estimates' },
-      { id: 'projects', label: 'Projects' },
-      { id: 'documents', label: 'Documents' },
-      { id: 'contacts', label: 'Contacts' },
-      { id: 'financials', label: 'Financials' }
-    ];
-
-    return React.createElement('div', { className: 'border-b border-gray-200 mb-6' },
-      React.createElement('nav', { className: 'flex -mb-px' },
-        tabs.map(tab =>
-          React.createElement('button', {
-            key: tab.id,
-            onClick: () => handleTabClick(tab.id),
-            className: `whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm ${
-              currentView === tab.id
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`
-          }, tab.label)
-        )
-      )
-    );
-  };
-
-  const renderDetailsView = () => {
-    if (isEditing) {
-      return React.createElement('div', { className: 'grid grid-cols-2 gap-4 p-4' },
-        // Edit form fields
-        React.createElement('div', { className: 'space-y-4' },
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Name'),
-            React.createElement('input', {
-              type: 'text',
-              value: editData.name,
-              onChange: e => setEditData(prev => ({ ...prev, name: e.target.value })),
-              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
-            })
-          ),
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Email'),
-            React.createElement('input', {
-              type: 'email',
-              value: editData.email,
-              onChange: e => setEditData(prev => ({ ...prev, email: e.target.value })),
-              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
-            })
-          ),
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'Phone'),
-            React.createElement('input', {
-              type: 'tel',
-              value: editData.phone,
-              onChange: e => setEditData(prev => ({ ...prev, phone: e.target.value })),
-              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
-            })
-          )
-        ),
-        React.createElement('div', { className: 'space-y-4' },
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, 'City'),
-            React.createElement('input', {
-              type: 'text',
-              value: editData.city,
-              onChange: e => setEditData(prev => ({ ...prev, city: e.target.value })),
-              className: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2'
-            })
-          )
-        ),
-        React.createElement('div', { className: 'col-span-2 flex justify-end space-x-4 mt-4' },
-          React.createElement('button', {
-            onClick: () => setIsEditing(false),
-            className: 'px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
-          }, 'Cancel'),
-          React.createElement('button', {
-            onClick: handleSave,
-            className: 'px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700'
-          }, 'Save Changes')
-        )
-      );
-    }
-
-    return React.createElement('div', { className: 'px-4 py-5 sm:p-6' },
-      React.createElement('div', { className: 'flex justify-end mb-4' },
-        React.createElement('button', {
-          onClick: () => setIsEditing(true),
-          className: 'px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
-        }, 'Edit Customer')
-      ),
-      React.createElement('dl', { className: 'grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2' },
-        [
-          { label: 'Customer ID', value: customer.customerId },
-          { label: 'Name', value: customer.name },
-          { label: 'Email', value: customer.email },
-          { label: 'Phone', value: customer.phone },
-          { label: 'Address', value: customer.address },
-          { label: 'City', value: customer.city },
-          { label: 'State', value: customer.state },
-          { label: 'ZIP', value: customer.zip },
-          { label: 'Status', value: customer.status }
-        ].map(item => 
-          React.createElement('div', { key: item.label, className: 'sm:col-span-1' },
-            React.createElement('dt', { className: 'text-sm font-medium text-gray-500' },
-              item.label
-            ),
-            React.createElement('dd', { className: 'mt-1 text-sm text-gray-900' },
-              item.value || 'N/A'
-            )
-          )
-        )
-      )
-    );
-  };
-
-  const renderEstimatesView = () => {
-    return React.createElement('div', { className: 'px-4 py-5 sm:p-6' },
-      React.createElement(window.EstimatesManager, {
-        customer: customer,
-        onBack: () => setCurrentView('details'),
-        showMessage: showMessage
-      })
-    );
-  };
-
-  return React.createElement('div', { className: 'bg-white shadow overflow-hidden sm:rounded-lg' },
-    React.createElement(Navigation),
-    currentView === 'details' ? renderDetailsView() :
-    currentView === 'estimates' ? renderEstimatesView() :
-    currentView === 'projects' ? React.createElement(window.CustomerProjects, {
-      customer,
-      showMessage,
-      onBack: () => setCurrentView('details')
-    }) :
-    currentView === 'documents' ? React.createElement(window.CustomerDocuments, {
-      customer,
-      showMessage
-    }) :
-    currentView === 'contacts' ? React.createElement(window.CustomerContacts, {
-      customer,
-      showMessage
-    }) :
-    currentView === 'financials' ? React.createElement(window.CustomerFinancials, {
-      customer,
-      showMessage
-    }) : null
-  );
+  getStatusDisplay: (status) => {
+    const config = window.CONSTANTS.workflow.customerManagement.statusDisplay[status];
+    return {
+      color: config.color,
+      icon: config.icon,
+      label: config.label,
+      actions: config.actions || []
+    };
+  }
 };
 
-const CustomerForm = () => {
-  const handleValidAddress = (validatedAddress) => {
-    setCustomerData(prev => ({
+const validateAddress = async (address) => {
+  const response = await google.script.run
+    .withSuccessHandler(result => result)
+    .withFailureHandler(error => ({ success: false, error: error.message }))
+    .validateAddress(address);
+
+  if (!response.success) {
+    throw new Error(response.error || 'Address validation failed');
+  }
+  return response.data;
+};
+
+const StatusBadge = ({ status, onStatusChange }) => {
+  const config = STATUS_CONFIG.getStatusDisplay(status);
+  return React.createElement('div', { className: 'flex items-center space-x-2' }, [
+    React.createElement('span', {
+      className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+        bg-${config.color}-100 text-${config.color}-800`
+    }, [
+      React.createElement('span', { className: `mr-1 ${config.icon}` }),
+      config.label
+    ]),
+    window.CONSTANTS.PERMISSIONS.CUSTOMER.update?.includes(window.CONSTANTS.USER_ROLE) &&
+    React.createElement('select', {
+      onChange: (e) => onStatusChange(e.target.value),
+      className: 'text-sm border rounded',
+      value: ''
+    }, [
+      React.createElement('option', { value: '' }, 'Change Status'),
+      ...config.actions.map(action =>
+        React.createElement('option', { value: action }, action)
+      )
+    ])
+  ]);
+};
+
+const CustomerDetails = ({ customer, onBack }) => {
+  const [state, setState] = React.useState({
+    loading: false,
+    error: null,
+    editMode: false,
+    formData: { ...customer },
+    contacts: [],
+    documents: [],
+    estimates: [],
+    projects: []
+  });
+
+  // Load related data on mount
+  React.useEffect(() => {
+    loadRelatedData();
+  }, [customer.CustomerID]);
+
+  const loadRelatedData = async () => {
+    setState(prev => ({ ...prev, loading: true }));
+    try {
+      const [contacts, documents, estimates, projects] = await Promise.all([
+        google.script.run.withSuccessHandler(data => data).getCustomerContacts(customer.CustomerID),
+        google.script.run.withSuccessHandler(data => data).getCustomerDocuments(customer.CustomerID),
+        google.script.run.withSuccessHandler(data => data).getCustomerEstimates(customer.CustomerID),
+        google.script.run.withSuccessHandler(data => data).getCustomerProjects(customer.CustomerID)
+      ]);
+
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        contacts,
+        documents,
+        estimates,
+        projects
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message || 'Failed to load customer data'
+      }));
+    }
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    setState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      await google.script.run
+        .withSuccessHandler(() => {
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            formData: {
+              ...prev.formData,
+              Status: newStatus
+            }
+          }));
+        })
+        .withFailureHandler(error => {
+          throw new Error(error.message || 'Status update failed');
+        })
+        .updateCustomerStatus(customer.CustomerID, newStatus);
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message
+      }));
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setState(prev => ({
       ...prev,
-      address: validatedAddress.street,
-      city: validatedAddress.city,
-      state: validatedAddress.state,
-      zip: validatedAddress.zip,
-      coordinates: validatedAddress.coordinates
+      formData: {
+        ...prev.formData,
+        [field]: value
+      }
     }));
   };
 
-  return React.createElement('form', { className: 'space-y-4' },
-    // ...existing form fields...
-    React.createElement(AddressInput, {
-      onValidAddress: handleValidAddress,
-      initialValue: customerData.address,
-      required: true
+  const handleSubmit = async () => {
+    setState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const validation = await google.script.run
+        .withSuccessHandler(response => response)
+        .withFailureHandler(error => {
+          throw new Error(error.message || 'Validation failed');
+        })
+        .validateCustomerData(state.formData);
+
+      if (!validation.isValid) {
+        throw new Error(validation.errors.join(', '));
+      }
+
+      await google.script.run
+        .withSuccessHandler(response => {
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            editMode: false
+          }));
+        })
+        .withFailureHandler(error => {
+          throw new Error(error.message || 'Failed to update customer');
+        })
+        .updateCustomerData(state.formData);
+
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message
+      }));
+    }
+  };
+
+  const renderField = (label, value, field) => {
+    return React.createElement('div', {
+      className: 'mb-4'
+    }, [
+      React.createElement('label', {
+        className: 'block text-sm font-medium text-gray-700',
+        key: 'label'
+      }, label),
+      state.editMode ?
+        React.createElement('input', {
+          type: 'text',
+          className: 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500',
+          value: state.formData[field] || '',
+          onChange: (e) => handleInputChange(field, e.target.value),
+          key: 'input'
+        }) :
+        React.createElement('div', {
+          className: 'mt-1 text-sm text-gray-900',
+          key: 'value'
+        }, value)
+    ]);
+  };
+
+  const renderSummarySection = () => {
+    return React.createElement('div', {
+      className: 'grid grid-cols-1 md:grid-cols-3 gap-4 mb-6',
+      key: 'summary'
+    }, [
+      {
+        title: 'Total Projects',
+        value: state.projects.length,
+        color: 'blue'
+      },
+      {
+        title: 'Active Estimates',
+        value: state.estimates.filter(e => e.Status === 'PENDING').length,
+        color: 'yellow'
+      },
+      {
+        title: 'Documents',
+        value: state.documents.length,
+        color: 'green'
+      }
+    ].map(item => 
+      React.createElement('div', {
+        key: item.title,
+        className: `bg-${item.color}-50 p-4 rounded-lg`
+      }, [
+        React.createElement('div', {
+          className: 'text-sm text-gray-600'
+        }, item.title),
+        React.createElement('div', {
+          className: `text-xl font-semibold text-${item.color}-700`
+        }, item.value)
+      ])
+    ));
+  };
+
+  const renderRelatedItems = () => {
+    return React.createElement('div', {
+      className: 'mt-6 space-y-6',
+      key: 'related'
+    }, [
+      // Recent Projects
+      React.createElement('div', {
+        className: 'border-t border-gray-200 pt-6'
+      }, [
+        React.createElement('h3', {
+          className: 'text-lg font-medium text-gray-900 mb-4'
+        }, 'Recent Projects'),
+        React.createElement('div', {
+          className: 'space-y-2'
+        }, state.projects.slice(0, 3).map(project =>
+          React.createElement('div', {
+            key: project.ProjectID,
+            className: 'flex justify-between items-center p-3 bg-gray-50 rounded-md'
+          }, [
+            React.createElement('span', null, project.ProjectName),
+            React.createElement(StatusBadge, {
+              status: project.Status
+            })
+          ])
+        ))
+      ]),
+      // Recent Estimates
+      React.createElement('div', {
+        className: 'border-t border-gray-200 pt-6'
+      }, [
+        React.createElement('h3', {
+          className: 'text-lg font-medium text-gray-900 mb-4'
+        }, 'Recent Estimates'),
+        React.createElement('div', {
+          className: 'space-y-2'
+        }, state.estimates.slice(0, 3).map(estimate =>
+          React.createElement('div', {
+            key: estimate.EstimateID,
+            className: 'flex justify-between items-center p-3 bg-gray-50 rounded-md'
+          }, [
+            React.createElement('span', null, `Estimate #${estimate.EstimateID}`),
+            React.createElement(StatusBadge, {
+              status: estimate.Status
+            })
+          ])
+        ))
+      ])
+    ]);
+  };
+
+  return React.createElement('div', {
+    className: 'bg-white shadow rounded-lg p-6'
+  }, [
+    // Header
+    React.createElement('div', {
+      className: 'flex justify-between items-center mb-6',
+      key: 'header'
+    }, [
+      React.createElement('h2', {
+        className: 'text-2xl font-bold text-gray-900'
+      }, 'Customer Details'),
+      React.createElement('div', {
+        className: 'space-x-2'
+      }, [
+        React.createElement('button', {
+          className: 'px-4 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50',
+          onClick: onBack,
+          key: 'back'
+        }, 'Back'),
+        React.createElement('button', {
+          className: 'px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700',
+          onClick: () => state.editMode ? handleSubmit() : setState(prev => ({ ...prev, editMode: true })),
+          disabled: state.loading,
+          key: 'edit'
+        }, state.editMode ? 'Save' : 'Edit')
+      ])
+    ]),
+
+    // Error Message
+    state.error && React.createElement(MessageAlert, {
+      message: state.error,
+      type: 'error',
+      onClose: () => setState(prev => ({ ...prev, error: null })),
+      key: 'error'
     }),
-    // ...existing code...
-  );
+
+    // Summary Section
+    renderSummarySection(),
+
+    // Customer Fields
+    React.createElement('div', {
+      className: 'space-y-6',
+      key: 'fields'
+    }, [
+      renderField('Name', customer.Name, 'Name'),
+      renderField('Email', customer.Email, 'Email'),
+      renderField('Phone', customer.Phone, 'Phone'),
+      renderField('Address', customer.Address, 'Address'),
+      renderField('Company', customer.Company, 'Company')
+    ]),
+
+    // Status Section with handleStatusChange
+    React.createElement('div', {
+      className: 'mt-6 pt-6 border-t border-gray-200',
+      key: 'status'
+    }, [
+      React.createElement('h3', {
+        className: 'text-lg font-medium text-gray-900 mb-4'
+      }, 'Status'),
+      React.createElement(StatusBadge, {
+        status: customer.Status,
+        onStatusChange: handleStatusChange
+      })
+    ]),
+
+    // Related Items Section
+    renderRelatedItems()
+  ]);
 };
 
-window.CustomerDetails = CustomerDetails;
+// Export for GAS
+if (typeof this !== 'undefined') {
+  this.CustomerDetails = CustomerDetails;
+}
 </script>
 

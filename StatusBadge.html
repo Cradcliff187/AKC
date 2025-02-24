@@ -1,0 +1,43 @@
+<script>
+const StatusBadge = ({ status }) => {
+  const config = CONSTANTS.STATUS_CONFIG[status] || {
+    color: 'gray',
+    icon: 'circle',
+    label: status
+  };
+
+  // Use array for multiple children
+  const children = [
+    React.createElement('span', {
+      key: 'icon',
+      className: `mr-1 ${config.icon}`
+    }),
+    config.label
+  ];
+
+  // Single parent element with proper props
+  return React.createElement('span', {
+    className: [
+      'inline-flex',
+      'items-center',
+      'px-2.5',
+      'py-0.5',
+      'rounded-full',
+      'text-xs',
+      'font-medium',
+      `bg-${config.color}-100`,
+      `text-${config.color}-800`
+    ].join(' ')
+  }, children);
+};
+
+// Make component available globally
+if (typeof window !== 'undefined') {
+  window.StatusBadge = StatusBadge;
+}
+
+// Export for GAS
+if (typeof this !== 'undefined') {
+  this.StatusBadge = StatusBadge;
+}
+</script>
