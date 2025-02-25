@@ -1,4 +1,3 @@
-<!-- EstimateCreator.html -->
 <script>
 // Check at load time if google.script.run is available
 console.log("EstimateCreator component script loaded.");
@@ -8,807 +7,362 @@ if (typeof google === "undefined" || !google.script || !google.script.run) {
   console.log("google.script.run is available.");
 }
 
-// Only define these functions if they don't already exist
-if (typeof window.EstimateCreator === 'undefined') {
-  // Helper function to validate customer data structure
-  const validateCustomerResponse = (data) => {
-    if (!Array.isArray(data)) {
-      console.error("Customer data is not an array:", data);
+// Helper function to validate customer data structure
+const validateCustomerResponse = (data) => {
+  if (!Array.isArray(data)) {
+    console.error("Customer data is not an array:", data);
+    return false;
+  }
+  
+  // Check first customer object structure
+  if (data.length > 0) {
+    const requiredFields = ['customerId', 'name', 'address'];
+    const firstCustomer = data[0];
+    const missingFields = requiredFields.filter(field => !firstCustomer.hasOwnProperty(field));
+    
+    if (missingFields.length > 0) {
+      console.error("Customer data missing required fields:", missingFields);
       return false;
     }
-    
-    // Check first customer object structure
-    if (data.length > 0) {
-      const requiredFields = ['customerId', 'name', 'address'];
-      const firstCustomer = data[0];
-      const missingFields = requiredFields.filter(field => !firstCustomer.hasOwnProperty(field));
-      
-      if (missingFields.length > 0) {
-        console.error("Customer data missing required fields:", missingFields);
-        return false;
-      }
-    }
-    
-    return true;
-  };
+  }
+  
+  return true;
+};
 
-  // Scoped status validation function (avoid global conflict)
-  const localValidateStatusTransition = (currentStatus, newStatus) => {
-    const workflow = window.CONSTANTS.workflow.estimateManagement;
-    return workflow.transitions[currentStatus?.includes(newStatus)];
-  };
+const EstimateEmailDialog = ({
+  isOpen, 
+  onClose, 
+  estimate, 
+  onSend, 
+  defaultEmail = ''
+}) => {
+  const [recipientEmail, setRecipientEmail] = React.useState(defaultEmail);
+  const [subject, setSubject] = React.useState('');
+  const [notes, setNotes] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [error, setError] = React.useState('');
 
-  // Add Status Management Service - scoped to avoid conflicts
-  const localEstimateStatusManager = {
-    validateTransition: (currentStatus, newStatus) => {
-      return localValidateStatusTransition(currentStatus, newStatus);
-    },
-    
-    executeTransition: async (estimateId, newStatus, currentStatus) => {
-      // Execute hooks from blueprint
-      await executeBeforeTransitionHooks(estimateId, currentStatus, newStatus);
-      
-      const result = await google.script.run
-        .withSuccessHandler(response => response)
-        .withFailureHandler(error => { throw error; })
-        .updateEstimateStatusForClient({
-          estimateId,
-          newStatus,
-          currentStatus
-        });
-        
-      await executeAfterTransitionHooks(estimateId, currentStatus, newStatus);
-      return result;
-    }
-  };
-
-  // Local activity logging function to avoid conflicts
-  const localLogActivity = async (action, details) => {
-    await google.script.run
-      .withSuccessHandler(() => {})
-      .withFailureHandler(error => console.error('Activity log error:', error))
-      .logActivity({
-        action,
-        moduleType: 'ESTIMATE',
-        referenceId: estimateId,
-        details
-      });
-  };
-
-  // Local validation function to avoid conflicts
-  const localValidateEstimateData = (data) => {
-    const requiredFields = [
-      'customerId',
-      'projectName',
-      'scopeOfWork',
-      'estimatedAmount'
-    ];
-
-    const missing = requiredFields.filter(field => !data[field]);
-    if (missing.length > 0) {
-      throw new Error(`Missing required fields: ${missing.join(', ')}`);
-    }
-
-    // Validate amount
-    if (parseFloat(data.estimatedAmount) <= 0) {
-      throw new Error('Estimate amount must be greater than zero');
-    }
-
-    return true;
-  };
-
-  // Scoped Components
-  const EstimateEmailDialog = ({
-    isOpen, 
-    onClose, 
-    estimate, 
-    onSend, 
-    defaultEmail = ''
-  }) => {
-    const [recipientEmail, setRecipientEmail] = React.useState(defaultEmail);
-    const [subject, setSubject] = React.useState('');
-    const [notes, setNotes] = React.useState('');
-    const [sending, setSending] = React.useState(false);
-    const [error, setError] = React.useState('');
-
-    React.useEffect(() => {
-      if (isOpen) {
-        setRecipientEmail(defaultEmail);
-        setSubject(`Estimate ${estimate.estimateId} from AKC LLC`);
-        setNotes('');
-        setError('');
-      }
-    }, [isOpen, defaultEmail, estimate]);
-
-    // UPDATED handleSubmit TO HANDLE NULL RESPONSE AS SUCCESS
-    const handleSubmit = async (e) => {
-      e.preventDefault();
+  React.useEffect(() => {
+    if (isOpen) {
+      setRecipientEmail(defaultEmail);
+      setSubject(`Estimate ${estimate.estimateId} from AKC LLC`);
+      setNotes('');
       setError('');
-      setSending(true);
+    }
+  }, [isOpen, defaultEmail, estimate]);
 
-      try {
-        const response = await onSend({
-          estimateId: estimate.estimateId,
-          docId: estimate.docId,
-          recipientEmail,
-          subject,
-          notes,
-          customerName: estimate.customerName,
-          projectName: estimate.projectName,
-          amount: estimate.totalAmount
-        });
+  // UPDATED handleSubmit TO HANDLE NULL RESPONSE AS SUCCESS
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSending(true);
 
-        // Handle null response as success
-        if (response === null || response.success) {
-          onClose();
-          return;
-        }
-        
-        throw new Error(response.error || 'Failed to send email');
-      } catch (err) {
-        console.error('Email submit error:', err);
-        setError(err.message || 'Failed to send email');
-      } finally {
-        setSending(false);
+    try {
+      const response = await onSend({
+        estimateId: estimate.estimateId,
+        docId: estimate.docId,
+        recipientEmail,
+        subject,
+        notes,
+        customerName: estimate.customerName,
+        projectName: estimate.projectName,
+        amount: estimate.totalAmount
+      });
+
+      // Handle null response as success
+      if (response === null || response.success) {
+        onClose();
+        return;
       }
-    };
+      
+      throw new Error(response.error || 'Failed to send email');
+    } catch (err) {
+      console.error('Email submit error:', err);
+      setError(err.message || 'Failed to send email');
+    } finally {
+      setSending(false);
+    }
+  };
 
-    if (!isOpen) return null;
+  if (!isOpen) return null;
 
-    return React.createElement('div', { 
-      className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+  return React.createElement('div', { 
+    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+  },
+    React.createElement('div', { 
+      className: 'bg-white rounded-lg max-w-lg w-full p-6'
     },
       React.createElement('div', { 
-        className: 'bg-white rounded-lg max-w-lg w-full p-6'
+        className: 'flex justify-between items-center mb-4'
       },
-        React.createElement('div', { 
-          className: 'flex justify-between items-center mb-4'
-        },
-          React.createElement('h3', { 
-            className: 'text-lg font-medium'
-          }, 'Send Estimate'),
-          React.createElement('button', {
-            onClick: onClose,
-            className: 'text-gray-400 hover:text-gray-500 text-xl'
-          }, '×')
+        React.createElement('h3', { 
+          className: 'text-lg font-medium'
+        }, 'Send Estimate'),
+        React.createElement('button', {
+          onClick: onClose,
+          className: 'text-gray-400 hover:text-gray-500 text-xl'
+        }, '×')
+      ),
+      React.createElement('form', {
+        onSubmit: handleSubmit,
+        className: 'space-y-4'
+      },
+        React.createElement('div', null,
+          React.createElement('label', { 
+            className: 'block text-sm font-medium mb-1'
+          }, 'Recipient Email:'),
+          React.createElement('input', {
+            type: 'email',
+            value: recipientEmail,
+            onChange: e => setRecipientEmail(e.target.value),
+            className: 'w-full p-2 border rounded',
+            required: true
+          })
         ),
-        React.createElement('form', {
-          onSubmit: handleSubmit,
-          className: 'space-y-4'
+        React.createElement('div', null,
+          React.createElement('label', { 
+            className: 'block text-sm font-medium mb-1'
+          }, 'Subject:'),
+          React.createElement('input', {
+            type: 'text',
+            value: subject,
+            onChange: e => setSubject(e.target.value),
+            className: 'w-full p-2 border rounded',
+            required: true
+          })
+        ),
+        React.createElement('div', null,
+          React.createElement('label', { 
+            className: 'block text-sm font-medium mb-1'
+          }, 'Additional Notes:'),
+          React.createElement('textarea', {
+            value: notes,
+            onChange: e => setNotes(e.target.value),
+            className: 'w-full p-2 border rounded h-24',
+            placeholder: 'Optional message to include in the email'
+          })
+        ),
+        error && React.createElement('div', {
+          className: 'text-red-600 text-sm p-2 bg-red-50 rounded'
+        }, error),
+        React.createElement('div', {
+          className: 'flex justify-end space-x-3'
         },
-          React.createElement('div', null,
-            React.createElement('label', { 
-              className: 'block text-sm font-medium mb-1'
-            }, 'Recipient Email:'),
-            React.createElement('input', {
-              type: 'email',
-              value: recipientEmail,
-              onChange: e => setRecipientEmail(e.target.value),
-              className: 'w-full p-2 border rounded',
-              required: true
-            })
-          ),
-          React.createElement('div', null,
-            React.createElement('label', { 
-              className: 'block text-sm font-medium mb-1'
-            }, 'Subject:'),
-            React.createElement('input', {
-              type: 'text',
-              value: subject,
-              onChange: e => setSubject(e.target.value),
-              className: 'w-full p-2 border rounded',
-              required: true
-            })
-          ),
-          React.createElement('div', null,
-            React.createElement('label', { 
-              className: 'block text-sm font-medium mb-1'
-            }, 'Additional Notes:'),
-            React.createElement('textarea', {
-              value: notes,
-              onChange: e => setNotes(e.target.value),
-              className: 'w-full p-2 border rounded h-24',
-              placeholder: 'Optional message to include in the email'
-            })
-          ),
-          error && React.createElement('div', {
-            className: 'text-red-600 text-sm p-2 bg-red-50 rounded'
-          }, error),
+          React.createElement('button', {
+            type: 'button',
+            onClick: onClose,
+            className: 'px-4 py-2 border rounded hover:bg-gray-50'
+          }, 'Cancel'),
+          React.createElement('button', {
+            type: 'submit',
+            disabled: sending,
+            className: `px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 
+              ${sending ? 'opacity-50 cursor-not-allowed' : ''}`
+          }, sending ? 'Sending...' : 'Send Email')
+        )
+      )
+    )
+  );
+};
+
+const EstimateActions = ({ onSubmit, disabled, loading }) => {
+  const [showActions, setShowActions] = React.useState(false);
+
+  const actions = [
+    { 
+      id: 'DRAFT', 
+      label: 'Save as Draft',
+      description: 'Save estimate but don\'t send to customer yet',
+      icon: '📝'
+    },
+    { 
+      id: 'PENDING', 
+      label: 'Save & Submit for Review',
+      description: 'Save and mark ready for internal review',
+      icon: '👀'
+    },
+    {
+      id: 'PENDING_CUSTOMER',
+      label: 'Save & Send to Customer',
+      description: 'Save and prepare to email to customer',
+      icon: '📧'
+    }
+  ];
+
+  const handleActionClick = (action) => {
+    setShowActions(false);
+    onSubmit(action.id);
+  };
+
+  return React.createElement('div', null,
+    !showActions ? 
+      React.createElement('button', {
+        onClick: () => setShowActions(true),
+        disabled: disabled || loading,
+        className: `px-6 py-3 rounded font-medium text-white
+          ${disabled || loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`
+      }, loading ? 'Processing...' : 'Generate Estimate')
+    :
+      React.createElement('div', {
+        className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+      },
+        React.createElement('div', {
+          className: 'bg-white rounded-lg max-w-md w-full p-6'
+        },
+          React.createElement('h3', {
+            className: 'text-lg font-medium mb-4'
+          }, 'Choose Action'),
           React.createElement('div', {
-            className: 'flex justify-end space-x-3'
+            className: 'space-y-3'
           },
+            actions.map(action => 
+              React.createElement('button', {
+                key: action.id,
+                onClick: () => handleActionClick(action),
+                className: 'w-full p-4 text-left border rounded hover:bg-gray-50 flex items-center space-x-3'
+              },
+                React.createElement('span', {
+                  className: 'text-2xl'
+                }, action.icon),
+                React.createElement('div', null,
+                  React.createElement('div', {
+                    className: 'font-medium'
+                  }, action.label),
+                  React.createElement('div', {
+                    className: 'text-sm text-gray-500'
+                  }, action.description)
+                )
+              )
+            ),
             React.createElement('button', {
-              type: 'button',
-              onClick: onClose,
-              className: 'px-4 py-2 border rounded hover:bg-gray-50'
-            }, 'Cancel'),
-            React.createElement('button', {
-              type: 'submit',
-              disabled: sending,
-              className: `px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 
-                ${sending ? 'opacity-50 cursor-not-allowed' : ''}`
-            }, sending ? 'Sending...' : 'Send Email')
+              onClick: () => setShowActions(false),
+              className: 'w-full p-3 border rounded hover:bg-gray-50 mt-4'
+            }, 'Cancel')
           )
         )
       )
-    );
+  );
+};
+
+const EstimateCreator = () => {
+  // Log component load
+  console.log("EstimateCreator component instantiated.");
+
+  // Step management
+  const [step, setStep] = React.useState('CUSTOMER_TYPE');
+  const [message, setMessage] = React.useState({ text: '', type: '' });
+  const [loading, setLoading] = React.useState(false);
+
+  // Customer state
+  const [isNewCustomer, setIsNewCustomer] = React.useState(false);
+  const [customers, setCustomers] = React.useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState('');
+  const [customerData, setCustomerData] = React.useState({
+    name: '',
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    email: '',
+    phone: ''
+  });
+
+  // Project state
+  const [projectData, setProjectData] = React.useState({
+    name: '',
+    siteLocation: '',
+    siteNotes: '',
+    scopeOfWork: '',
+    tableItems: [{ itemService: '', description: '', qtyHours: '', rate: '', amount: '' }],
+    totalAmount: 0
+  });
+
+  // Document preview state
+  const [previewUrl, setPreviewUrl] = React.useState('');
+  const [documentGenerated, setDocumentGenerated] = React.useState(false);
+  const [estimateId, setEstimateId] = React.useState('');
+
+  // New state variables for email functionality
+  const [showEmailDialog, setShowEmailDialog] = React.useState(false);
+  const [currentEstimate, setCurrentEstimate] = React.useState(null);
+
+  const mountedRef = React.useRef(true);
+
+  // Component lifecycle
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Helper functions
+  const showMessage = (text, type) => {
+    if (!mountedRef.current) return;
+    console.log("showMessage:", text, type);
+    setMessage({ text, type });
   };
 
-  const EstimateActions = ({ onSubmit, disabled, loading }) => {
-    const [showActions, setShowActions] = React.useState(false);
-
-    const actions = [
-      { 
-        id: 'DRAFT', 
-        label: 'Save as Draft',
-        description: 'Save estimate but don\'t send to customer yet',
-        icon: '📝'
-      },
-      { 
-        id: 'PENDING', 
-        label: 'Save & Submit for Review',
-        description: 'Save and mark ready for internal review',
-        icon: '👀'
-      },
-      {
-        id: 'PENDING_CUSTOMER',
-        label: 'Save & Send to Customer',
-        description: 'Save and prepare to email to customer',
-        icon: '📧'
-      }
-    ];
-
-    const handleActionClick = async (action) => {
-      const currentStatus = estimate?.Status || 'DRAFT';
-      
-      if (!localEstimateStatusManager.validateTransition(currentStatus, action.id)) {
-        showMessage('Invalid status transition', 'error');
-        return;
-      }
-    
-      setState(prev => ({ ...prev, loading: true }));
-      
-      try {
-        await localEstimateStatusManager.executeTransition(
-          estimate.EstimateID,
-          action.id,
-          currentStatus
-        );
-        
-        showMessage('Status updated successfully', 'success');
-        loadEstimate();
-      } catch (error) {
-        showMessage(error.message || 'Status update failed', 'error');
-      } finally {
-        setState(prev => ({ ...prev, loading: false }));
-      }
-    };
-
-    return React.createElement('div', null,
-      !showActions ? 
-        React.createElement('button', {
-          onClick: () => setShowActions(true),
-          disabled: disabled || loading,
-          className: `px-6 py-3 rounded font-medium text-white
-            ${disabled || loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`
-        }, loading ? 'Processing...' : 'Generate Estimate')
-      :
-        React.createElement('div', {
-          className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
-        },
-          React.createElement('div', {
-            className: 'bg-white rounded-lg max-w-md w-full p-6'
-          },
-            React.createElement('h3', {
-              className: 'text-lg font-medium mb-4'
-            }, 'Choose Action'),
-            React.createElement('div', {
-              className: 'space-y-3'
-            },
-              actions.map(action => 
-                React.createElement('button', {
-                  key: action.id,
-                  onClick: () => handleActionClick(action),
-                  className: 'w-full p-4 text-left border rounded hover:bg-gray-50 flex items-center space-x-3'
-                },
-                  React.createElement('span', {
-                    className: 'text-2xl'
-                  }, action.icon),
-                  React.createElement('div', null,
-                    React.createElement('div', {
-                      className: 'font-medium'
-                    }, action.label),
-                    React.createElement('div', {
-                      className: 'text-sm text-gray-500'
-                    }, action.description)
-                  )
-                )
-              ),
-              React.createElement('button', {
-                onClick: () => setShowActions(false),
-                className: 'w-full p-3 border rounded hover:bg-gray-50 mt-4'
-              }, 'Cancel')
-            )
-          )
-        )
-    );
+  const formatAsCurrency = (value) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return '';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(numValue);
   };
 
-  const EstimateCreator = ({ onBack }) => {
-    // Log component load
-    console.log("EstimateCreator component instantiated.");
-
-    // Step management
-    const [step, setStep] = React.useState('CUSTOMER_TYPE');
-    const [message, setMessage] = React.useState({ text: '', type: '' });
-    const [loading, setLoading] = React.useState(false);
-
-    // Customer state
-    const [isNewCustomer, setIsNewCustomer] = React.useState(false);
-    const [customers, setCustomers] = React.useState([]);
-    const [selectedCustomerId, setSelectedCustomerId] = React.useState('');
-    const [customerData, setCustomerData] = React.useState({
-      name: '',
-      address: '',
-      city: '',
-      state: '',
-      zip: '',
-      email: '',
-      phone: ''
-    });
-
-    // Project state
-    const [projectData, setProjectData] = React.useState({
-      name: '',
-      siteLocation: '',
-      siteNotes: '',
-      scopeOfWork: '',
-      tableItems: [{ itemService: '', description: '', qtyHours: '', rate: '', amount: '' }],
-      totalAmount: 0
-    });
-
-    // Document preview state
-    const [previewUrl, setPreviewUrl] = React.useState('');
-    const [documentGenerated, setDocumentGenerated] = React.useState(false);
-    const [estimateId, setEstimateId] = React.useState('');
-
-    // New state variables for email functionality
-    const [showEmailDialog, setShowEmailDialog] = React.useState(false);
-    const [currentEstimate, setCurrentEstimate] = React.useState(null);
-
-    const mountedRef = React.useRef(true);
-
-    // Component lifecycle
-    React.useEffect(() => {
-      mountedRef.current = true;
-      return () => { mountedRef.current = false; };
-    }, []);
-
-    // Helper functions
-    const showMessage = (text, type) => {
+  // Fetch customers on mount with enhanced error handling
+  React.useEffect(() => {
+    const fetchCustomers = async () => {
       if (!mountedRef.current) return;
-      console.log("showMessage:", text, type);
-      setMessage({ text, type });
-    };
-
-    const formatAsCurrency = (value) => {
-      const numValue = parseFloat(value);
-      if (isNaN(numValue)) return '';
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD'
-      }).format(numValue);
-    };
-
-    // Fetch customers on mount with enhanced error handling
-    React.useEffect(() => {
-      const fetchCustomers = async () => {
-        if (!mountedRef.current) return;
-        
-        console.log("Starting customer fetch...");
-        setLoading(true);
-        
-        try {
-          console.log("Making server request...");
-          const response = await new Promise((resolve) => {
-            google.script.run
-              .withSuccessHandler(result => {
-                console.log("Raw server response:", result);
-                // Handle null response
-                if (result === null) {
-                  resolve({ success: false, error: 'No response from server' });
-                } else {
-                  resolve(result);
-                }
-              })
-              .withFailureHandler(error => {
-                console.error("Server error:", error);
-                resolve({ success: false, error: error.toString() });
-              })
-              .getCustomersForClient();
-          });
-
-          if (!mountedRef.current) {
-            console.log("Component unmounted during fetch, aborting");
-            return;
-          }
-
-          console.log("Processing response:", response);
-          
-          // Safe check for response structure
-          if (response && response.success && Array.isArray(response.data)) {
-            if (validateCustomerResponse(response.data)) {
-              console.log(`Setting ${response.data.length} valid customers`);
-              setCustomers(response.data);
-            } else {
-              console.error("Invalid customer data structure");
-              showMessage('Invalid customer data format received', 'error');
-            }
-          } else {
-            console.error("Invalid or empty response:", response);
-            const errorMsg = (response && response.error) ? response.error : 'Failed to load customers - invalid response format';
-            showMessage(errorMsg, 'error');
-          }
-        } catch (error) {
-          console.error("Customer fetch error:", error);
-          if (mountedRef.current) {
-            showMessage('Failed to load customers: ' + (error.message || 'Unknown error'), 'error');
-          }
-        } finally {
-          if (mountedRef.current) {
-            setLoading(false);
-          }
-        }
-      };
-
-      fetchCustomers();
-    }, []);
-
-    // Calculate total amount from table items
-    const calculateTotalAmount = (items) => {
-      return items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    };
-
-    // Update table item and recalc total
-    const updateTableItem = (index, field, value) => {
-      setProjectData(prev => {
-        const updatedItems = [...prev.tableItems];
-        updatedItems[index] = { ...updatedItems[index], [field]: value };
-        
-        // Recalculate amount if needed
-        if (field === 'rate' || field === 'qtyHours') {
-          const rate = parseFloat(updatedItems[index].rate) || 0;
-          const qty = parseFloat(updatedItems[index].qtyHours) || 0;
-          updatedItems[index].amount = (rate * qty).toFixed(2);
-        }
-        
-        const totalAmount = calculateTotalAmount(updatedItems);
-        return { ...prev, tableItems: updatedItems, totalAmount };
-      });
-    };
-
-    // Handle currency input for table item (rate)
-    const handleCurrencyInput = (index, value) => {
-      let numbersOnly = value.replace(/[^0-9.]/g, '');
-      const parts = numbersOnly.split('.');
-      if (parts.length > 2) {
-        numbersOnly = parts[0] + '.' + parts[1];
-      }
-      if (parts.length > 1) {
-        numbersOnly = parts[0] + '.' + parts[1].slice(0, 2);
-      }
-      const numValue = parseFloat(numbersOnly);
-      if (!isNaN(numValue)) {
-        updateTableItem(index, 'rate', numbersOnly);
-      }
-    };
-
-    // Handle quantity input for table item
-    const handleQtyInput = (index, value) => {
-      updateTableItem(index, 'qtyHours', value);
-    };
-
-    // Format phone number
-    const formatPhoneNumber = (value) => {
-      const cleaned = value.replace(/\D/g, '');
-      if (cleaned.length >= 10) {
-        return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6,10)}`;
-      } else if (cleaned.length >= 6) {
-        return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6)}`;
-      } else if (cleaned.length >= 3) {
-        return `(${cleaned.slice(0,3)}) ${cleaned.slice(3)}`;
-      }
-      return cleaned ? `(${cleaned}` : '';
-    };
-
-    // Form validation
-    const const validateCustomerData = window.validateCustomerData; = () => {
-      if (isNewCustomer) {
-        const required = ['name', 'address', 'city', 'state', 'zip'];
-        const missingRequired = required.some(field => !customerData[field]?.trim());
-        if (missingRequired) return false;
-      } else {
-        if (!selectedCustomerId) return false;
-      }
-      return true;
-    };
-
-    const validateProjectData = () => {
-      const required = ['name', 'scopeOfWork'];
-      const missingRequired = required.some(field => !projectData[field]?.trim());
-      if (missingRequired) return false;
-      if (!projectData.tableItems?.some(item => item.itemService.trim() && item.description.trim())) return false;
-      if (projectData.totalAmount <= 0) return false;
-      return true;
-    };
-
-    // UPDATED handleSendEmail TO EXPLICITLY HANDLE NULL RESULT AND RESET FORM
-    const handleSendEmail = async (emailData) => {
+      
+      console.log("Starting customer fetch...");
+      setLoading(true);
+      
       try {
-        console.log('Sending email with data:', emailData);
-
-        const response = await new Promise(resolve => {
+        console.log("Making server request...");
+        const response = await new Promise((resolve) => {
           google.script.run
             .withSuccessHandler(result => {
-              console.log('Email send response:', result);
-              // Handle null result explicitly
+              console.log("Raw server response:", result);
+              // Handle null response
               if (result === null) {
-                resolve({ success: true }); // Assume success if we get null
+                resolve({ success: false, error: 'No response from server' });
               } else {
                 resolve(result);
               }
             })
-            .withFailureHandler(err => {
-              console.error('Email send error:', err);
-              resolve({ success: false, error: err.message || 'Failed to send email' });
+            .withFailureHandler(error => {
+              console.error("Server error:", error);
+              resolve({ success: false, error: error.toString() });
             })
-            .sendEstimateEmail(emailData);
+            .getCustomersForClient();
         });
 
-        if (response.success) {
-          showMessage('Estimate sent successfully!', 'success');
-          // Reset form after successful send
-          setTimeout(() => {
-            if (mountedRef.current) resetForm();
-          }, 2000);
-          return response;
-        } else {
-          throw new Error(response.error || 'Failed to send estimate');
+        if (!mountedRef.current) {
+          console.log("Component unmounted during fetch, aborting");
+          return;
         }
-      } catch (error) {
-        console.error('Error sending email:', error);
-        showMessage(error.message || 'Failed to send email', 'error');
-        throw error;
-      }
-    };
 
-    const logEstimate = async (estimateData, action) => {
-      try {
-        const logResponse = await new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)
-            .logEstimateActivity({
-              estimateId: estimateData.estimateId,
-              action: action,
-              status: estimateData.status,
-              details: `Estimate ${action.toLowerCase()} with status: ${estimateData.status}`
-            });
-        });
-
-        if (!logResponse.success) {
-          console.error('Failed to log estimate activity:', logResponse.error);
-        }
-      } catch (error) {
-        console.error('Error logging estimate activity:', error);
-        // Don't throw the error - we don't want to interrupt the main flow
-      }
-    };
-
-    // Modified handleSubmit function to support email sending
-    const handleSubmit = async (status = 'DRAFT') => {
-      if (!mountedRef.current) return;
-      setLoading(true);
-      showMessage("Processing estimate, please wait...", "info");
-
-      try {
-        // Step 1: Handle Customer Creation/Selection
-        let customerInfo;
+        console.log("Processing response:", response);
         
-        if (isNewCustomer) {
-          console.log('Creating new customer...');
-          try {
-            const customerPayload = {
-              name: customerData.name,
-              address: customerData.address,
-              city: customerData.city,
-              state: customerData.state,
-              zip: customerData.zip,
-              email: customerData.email || '',
-              phone: customerData.phone ? customerData.phone.replace(/\D/g, '') : ''
-            };
-            console.log('Sending customer payload:', customerPayload);
-
-            const customerResponse = await new Promise((resolve, reject) => {
-              google.script.run
-                .withSuccessHandler(result => {
-                  console.log('Raw server response:', result);
-                  if (result === null) {
-                    console.log('Got null response, will fetch latest customers...');
-                    resolve({ success: true, needToFetch: true });
-                  } else {
-                    resolve(result);
-                  }
-                })
-                .withFailureHandler(error => {
-                  console.error('Server error:', error);
-                  reject(new Error(error.message || 'Server error'));
-                })
-                .createCustomer(customerPayload);
-            });
-
-            if (customerResponse.needToFetch) {
-              console.log('Fetching latest customers to find new record...');
-              const latestCustomers = await new Promise(resolve => {
-                google.script.run
-                  .withSuccessHandler(resolve)
-                  .withFailureHandler(err => resolve({ success: false, error: err.message }))
-                  .getCustomersForClient();
-              });
-              
-              if (latestCustomers.success) {
-                const foundCustomer = latestCustomers.data.find(c => 
-                  c.name === customerData.name &&
-                  c.address === customerData.address
-                );
-                
-                if (foundCustomer) {
-                  customerInfo = foundCustomer;
-                  console.log('Found newly created customer:', customerInfo);
-                } else {
-                  throw new Error('Could not find newly created customer');
-                }
-              } else {
-                throw new Error('Failed to fetch latest customers');
-              }
-            } else {
-              if (!customerResponse.success) {
-                throw new Error(customerResponse.error || 'Failed to create customer');
-              }
-              customerInfo = customerResponse.data;
-              console.log('Created customer with direct response:', customerInfo);
-            }
-            
-          } catch (error) {
-            console.error('Error in customer creation:', error);
-            throw error;
+        // Safe check for response structure
+        if (response && response.success && Array.isArray(response.data)) {
+          if (validateCustomerResponse(response.data)) {
+            console.log(`Setting ${response.data.length} valid customers`);
+            setCustomers(response.data);
+          } else {
+            console.error("Invalid customer data structure");
+            showMessage('Invalid customer data format received', 'error');
           }
         } else {
-          customerInfo = customers.find(c => c.customerId === selectedCustomerId);
-          if (!customerInfo) {
-            throw new Error('Selected customer not found');
-          }
+          console.error("Invalid or empty response:", response);
+          const errorMsg = (response && response.error) ? response.error : 'Failed to load customers - invalid response format';
+          showMessage(errorMsg, 'error');
         }
-
-        // Step 2: Create Project
-        console.log('Creating project for customer:', customerInfo.customerId);
-        const projectResponse = await new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)
-            .createProject({
-              customerId: customerInfo.customerId,
-              projectName: projectData.name,
-              siteLocation: projectData.siteLocation || '',
-              siteNotes: projectData.siteNotes || ''
-            });
-        });
-
-        // Log the project creation response
-        console.log('Project creation response:', projectResponse);
-
-        if (!projectResponse || !projectResponse.success) {
-          throw new Error(projectResponse?.error || 'Failed to create project');
-        }
-        console.log('Created project:', projectResponse.data);
-
-        // Step 3: Format table items for estimate
-        const formattedTableItems = projectData.tableItems.map(item => ({
-          ...item,
-          rate: formatAsCurrency(parseFloat(item.rate)),
-          amount: formatAsCurrency(parseFloat(item.amount))
-        }));
-
-        // Step 4: Create estimate with status
-        const estimateData = {
-          customerId: customerInfo.customerId,
-          projectId: projectResponse.data.projectId,
-          projectFolderId: projectResponse.data.folders.estimates,
-          customerName: customerInfo.name,
-          customerAddress: customerInfo.address,
-          customerCity: customerInfo.city,
-          customerState: customerInfo.state,
-          customerZip: customerInfo.zip,
-          customerEmail: customerInfo.email,
-          customerPhone: customerInfo.phone,
-          projectName: projectData.name,
-          siteLocation: projectData.siteLocation || customerInfo.address,
-          siteNotes: projectData.siteNotes || '',
-          scopeOfWork: projectData.scopeOfWork,
-          tableItems: formattedTableItems,
-          totalAmount: projectData.totalAmount,
-          status: status,
-          generateDoc: true // <--- Added here
-        };
-
-        // Log additional details
-        console.log('Project folders:', projectResponse.data.folders);
-        console.log('Full estimate payload:', estimateData);
-
-        // Log the final estimate data right before creation
-        console.log('Creating estimate with data:', {
-          ...estimateData,
-          projectFolderId: projectResponse.data.folders.estimates
-        });
-
-        const estimateResponse = await new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)
-            .createAndSaveEstimate(estimateData);
-        });
-
-        if (!estimateResponse || !estimateResponse.success) {
-          throw new Error(estimateResponse?.error || 'Failed to create estimate');
-        }
-
-        // Create new estimate object for state management
-        console.log('Estimate Response:', estimateResponse);
-        console.log('Document ID from response:', estimateResponse.data?.docId);      
-        const newEstimate = {
-          estimateId: estimateResponse.data?.estimateId,
-          docId: estimateResponse.data?.docId,
-          customerName: customerInfo.name,
-          projectName: projectData.name,
-          totalAmount: projectData.totalAmount,
-          status: status
-        };
-
-        console.log('Created newEstimate object:', newEstimate);
-        
-        // Show success message based on status
-        const messages = {
-          'DRAFT': 'Estimate saved as draft',
-          'PENDING': 'Estimate submitted for review',
-          'PENDING_CUSTOMER': 'Estimate ready to send to customer'
-        };
-
-        showMessage(`✅ ${messages[status]}!`, 'success');
-
-        // Handle different status flows
-        if (status === 'PENDING_CUSTOMER') {
-          setCurrentEstimate(newEstimate);
-          setShowEmailDialog(true);
-        } else {
-          if (estimateResponse.data?.docUrl) {
-            setPreviewUrl(estimateResponse.data.docUrl);
-            window.open(estimateResponse.data.docUrl, '_blank');
-          }
-
-          if (estimateResponse.data?.estimateId) {
-            setEstimateId(estimateResponse.data.estimateId);
-          }
-
-          // Reset form after delay for non-email statuses
-          setTimeout(() => {
-            if (mountedRef.current) resetForm();
-          }, 2000);
-        }
-
       } catch (error) {
-        console.error("Error in handleSubmit:", error);
+        console.error("Customer fetch error:", error);
         if (mountedRef.current) {
-          showMessage(error.message || 'Failed to create estimate', 'error');
+          showMessage('Failed to load customers: ' + (error.message || 'Unknown error'), 'error');
         }
       } finally {
         if (mountedRef.current) {
@@ -817,442 +371,731 @@ if (typeof window.EstimateCreator === 'undefined') {
       }
     };
 
-    // Wrapper for Generate & Email action
-    const handleGenerateAndSend = async (e) => {
-      await handleSubmit(e, true);
-    };
+    fetchCustomers();
+  }, []);
 
-    // Reset form state
-    const resetForm = () => {
-      setStep('CUSTOMER_TYPE');
-      setMessage({ text: '', type: '' });
-      setLoading(false);
-      setIsNewCustomer(false);
-      setSelectedCustomerId('');
-      setCustomerData({
-        name: '', address: '', city: '', state: '', zip: '',
-        email: '', phone: ''
-      });
-      setProjectData({
-        name: '', siteLocation: '', siteNotes: '', scopeOfWork: '',
-        tableItems: [{ itemService: '', description: '', qtyHours: '', rate: '', amount: '' }],
-        totalAmount: 0
-      });
-      setPreviewUrl('');
-      setDocumentGenerated(false);
-      setEstimateId('');
-    };
+  // Calculate total amount from table items
+  const calculateTotalAmount = (items) => {
+    return items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  };
 
-    // Render functions for the steps
-    const renderCustomerTypeStep = () => {
-      return React.createElement('div', { className: 'space-y-4' },
-        React.createElement('h3', { className: 'text-lg font-medium' }, 'Select Customer Type'),
-        React.createElement('div', { className: 'space-y-2' },
-          React.createElement('button', {
-            onClick: () => { setIsNewCustomer(false); setStep('CUSTOMER_DETAILS'); },
-            className: 'w-full p-4 text-left border rounded hover:bg-gray-50'
-          }, 'Existing Customer'),
-          React.createElement('button', {
-            onClick: () => { setIsNewCustomer(true); setStep('CUSTOMER_DETAILS'); },
-            className: 'w-full p-4 text-left border rounded hover:bg-gray-50'
-          }, 'New Customer')
-        )
-      );
-    };
-
-    const renderCustomerDetailsStep = () => {
-      if (isNewCustomer) {
-        return React.createElement('div', { className: 'space-y-4' },React.createElement('h3', { className: 'text-lg font-medium' }, 'Customer Information'),
-          // Customer Name
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Customer Name'),
-            React.createElement('input', {
-              type: 'text',
-              value: customerData.name,
-              onChange: e => setCustomerData(prev => ({ ...prev, name: e.target.value })),
-              className: 'w-full p-2 border rounded',
-              required: true
-            })
-          ),
-          // Address
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Address'),
-            React.createElement('input', {
-              type: 'text',
-              value: customerData.address,
-              onChange: e => setCustomerData(prev => ({ ...prev, address: e.target.value })),
-              className: 'w-full p-2 border rounded',
-              required: true
-            })
-          ),
-          // City, State, ZIP
-          React.createElement('div', { className: 'grid grid-cols-3 gap-4' },
-            React.createElement('div', null,
-              React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'City'),
-              React.createElement('input', {
-                type: 'text',
-                value: customerData.city,
-                onChange: e => setCustomerData(prev => ({ ...prev, city: e.target.value })),
-                className: 'w-full p-2 border rounded',
-                required: true
-              })
-            ),
-            React.createElement('div', null,
-              React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'State'),
-              React.createElement('input', {
-                type: 'text',
-                value: customerData.state,
-                onChange: e => setCustomerData(prev => ({ ...prev, state: e.target.value })),
-                className: 'w-full p-2 border rounded',
-                maxLength: 2,
-                required: true
-              })
-            ),
-            React.createElement('div', null,
-              React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'ZIP'),
-              React.createElement('input', {
-                type: 'text',
-                value: customerData.zip,
-                onChange: e => setCustomerData(prev => ({
-                  ...prev,
-                  zip: e.target.value.replace(/\D/g, '').slice(0, 5)
-                })),
-                className: 'w-full p-2 border rounded',
-                maxLength: 5,
-                required: true
-              })
-            )
-          ),
-          // Email and Phone
-          React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
-            React.createElement('div', null,
-              React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Email'),
-              React.createElement('input', {
-                type: 'email',
-                value: customerData.email,
-                onChange: e => setCustomerData(prev => ({ ...prev, email: e.target.value })),
-                className: 'w-full p-2 border rounded'
-              })
-            ),
-            React.createElement('div', null,
-              React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Phone'),
-              React.createElement('input', {
-                type: 'tel',
-                value: customerData.phone,
-                onChange: e => setCustomerData(prev => ({
-                  ...prev,
-                  phone: formatPhoneNumber(e.target.value)
-                })),
-                className: 'w-full p-2 border rounded',
-                placeholder: '(555) 555-5555'
-              })
-            )
-          ),
-          // Navigation buttons
-          React.createElement('div', { className: 'flex space-x-4 pt-6' },
-            React.createElement('button', {
-              onClick: () => setStep('CUSTOMER_TYPE'),
-              className: 'flex-1 p-3 border rounded hover:bg-gray-50'
-            }, 'Back'),
-            React.createElement('button', {
-              onClick: () => {
-                if (const validateCustomerData = window.validateCustomerData;()) {
-                  setStep('PROJECT_DETAILS');
-                } else {
-                  showMessage('Please fill in all required fields correctly', 'error');
-                }
-              },
-              className: 'flex-1 p-3 bg-blue-600 text-white rounded hover:bg-blue-700'
-            }, 'Next')
-          )
-        );
-      } else {
-        // Existing customer selection
-        return React.createElement('div', { className: 'space-y-4' },
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Select Customer'),
-            React.createElement('select', {
-              value: selectedCustomerId,
-              onChange: e => setSelectedCustomerId(e.target.value),
-              className: 'w-full p-2 border rounded',
-              required: true
-            },
-              React.createElement('option', { value: '' }, 'Select Customer'),
-              customers.map(customer =>
-                React.createElement('option', {
-                  key: customer.customerId,
-                  value: customer.customerId
-                }, `${customer.name} (${customer.customerId})`)
-              )
-            )
-          ),
-          React.createElement('div', { className: 'flex space-x-4 pt-6' },
-            React.createElement('button', {
-              onClick: () => setStep('CUSTOMER_TYPE'),
-              className: 'flex-1 p-3 border rounded hover:bg-gray-50'
-            }, 'Back'),
-            React.createElement('button', {
-              onClick: () => {
-                if (const validateCustomerData = window.validateCustomerData;()) {
-                  setStep('PROJECT_DETAILS');
-                } else {
-                  showMessage('Please select a customer', 'error');
-                }
-              },
-              disabled: !selectedCustomerId,
-              className: `flex-1 p-3 rounded text-white ${!selectedCustomerId ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`
-            }, 'Next')
-          )
-        );
+  // Update table item and recalc total
+  const updateTableItem = (index, field, value) => {
+    setProjectData(prev => {
+      const updatedItems = [...prev.tableItems];
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
+      
+      // Recalculate amount if needed
+      if (field === 'rate' || field === 'qtyHours') {
+        const rate = parseFloat(updatedItems[index].rate) || 0;
+        const qty = parseFloat(updatedItems[index].qtyHours) || 0;
+        updatedItems[index].amount = (rate * qty).toFixed(2);
       }
-    };
+      
+      const totalAmount = calculateTotalAmount(updatedItems);
+      return { ...prev, tableItems: updatedItems, totalAmount };
+    });
+  };
 
-    const renderProjectDetailsStep = () => {
+  // Handle currency input for table item (rate)
+  const handleCurrencyInput = (index, value) => {
+    let numbersOnly = value.replace(/[^0-9.]/g, '');
+    const parts = numbersOnly.split('.');
+    if (parts.length > 2) {
+      numbersOnly = parts[0] + '.' + parts[1];
+    }
+    if (parts.length > 1) {
+      numbersOnly = parts[0] + '.' + parts[1].slice(0, 2);
+    }
+    const numValue = parseFloat(numbersOnly);
+    if (!isNaN(numValue)) {
+      updateTableItem(index, 'rate', numbersOnly);
+    }
+  };
+
+  // Handle quantity input for table item
+  const handleQtyInput = (index, value) => {
+    updateTableItem(index, 'qtyHours', value);
+  };
+
+  // Format phone number
+  const formatPhoneNumber = (value) => {
+    const cleaned = value.replace(/\D/g, '');
+    if (cleaned.length >= 10) {
+      return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6,10)}`;
+    } else if (cleaned.length >= 6) {
+      return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6)}`;
+    } else if (cleaned.length >= 3) {
+      return `(${cleaned.slice(0,3)}) ${cleaned.slice(3)}`;
+    }
+    return cleaned ? `(${cleaned}` : '';
+  };
+
+  // Form validation
+  const validateCustomerData = () => {
+    if (isNewCustomer) {
+      const required = ['name', 'address', 'city', 'state', 'zip'];
+      const missingRequired = required.some(field => !customerData[field]?.trim());
+      if (missingRequired) return false;
+    } else {
+      if (!selectedCustomerId) return false;
+    }
+    return true;
+  };
+
+  const validateProjectData = () => {
+    const required = ['name', 'scopeOfWork'];
+    const missingRequired = required.some(field => !projectData[field]?.trim());
+    if (missingRequired) return false;
+    if (!projectData.tableItems?.some(item => item.itemService.trim() && item.description.trim())) return false;
+    if (projectData.totalAmount <= 0) return false;
+    return true;
+  };
+
+  // UPDATED handleSendEmail TO EXPLICITLY HANDLE NULL RESULT AND RESET FORM
+  const handleSendEmail = async (emailData) => {
+    try {
+      console.log('Sending email with data:', emailData);
+
+      const response = await new Promise(resolve => {
+        google.script.run
+          .withSuccessHandler(result => {
+            console.log('Email send response:', result);
+            // Handle null result explicitly
+            if (result === null) {
+              resolve({ success: true }); // Assume success if we get null
+            } else {
+              resolve(result);
+            }
+          })
+          .withFailureHandler(err => {
+            console.error('Email send error:', err);
+            resolve({ success: false, error: err.message || 'Failed to send email' });
+          })
+          .sendEstimateEmail(emailData);
+      });
+
+      if (response.success) {
+        showMessage('Estimate sent successfully!', 'success');
+        // Reset form after successful send
+        setTimeout(() => {
+          if (mountedRef.current) resetForm();
+        }, 2000);
+        return response;
+      } else {
+        throw new Error(response.error || 'Failed to send estimate');
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      showMessage(error.message || 'Failed to send email', 'error');
+      throw error;
+    }
+  };
+
+  const logEstimate = async (estimateData, action) => {
+    try {
+      const logResponse = await new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .logEstimateActivity({
+            estimateId: estimateData.estimateId,
+            action: action,
+            status: estimateData.status,
+            details: `Estimate ${action.toLowerCase()} with status: ${estimateData.status}`
+          });
+      });
+
+      if (!logResponse.success) {
+        console.error('Failed to log estimate activity:', logResponse.error);
+      }
+    } catch (error) {
+      console.error('Error logging estimate activity:', error);
+      // Don't throw the error - we don't want to interrupt the main flow
+    }
+  };
+
+  // Modified handleSubmit function to support email sending
+  const handleSubmit = async (status = 'DRAFT') => {
+    if (!mountedRef.current) return;
+    setLoading(true);
+    showMessage("Processing estimate, please wait...", "info");
+
+    try {
+      // Step 1: Handle Customer Creation/Selection
+      let customerInfo;
+      
+      if (isNewCustomer) {
+        console.log('Creating new customer...');
+        try {
+          const customerPayload = {
+            name: customerData.name,
+            address: customerData.address,
+            city: customerData.city,
+            state: customerData.state,
+            zip: customerData.zip,
+            email: customerData.email || '',
+            phone: customerData.phone ? customerData.phone.replace(/\D/g, '') : ''
+          };
+          console.log('Sending customer payload:', customerPayload);
+
+          const customerResponse = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(result => {
+                console.log('Raw server response:', result);
+                if (result === null) {
+                  console.log('Got null response, will fetch latest customers...');
+                  resolve({ success: true, needToFetch: true });
+                } else {
+                  resolve(result);
+                }
+              })
+              .withFailureHandler(error => {
+                console.error('Server error:', error);
+                reject(new Error(error.message || 'Server error'));
+              })
+              .createCustomer(customerPayload);
+          });
+
+          if (customerResponse.needToFetch) {
+            console.log('Fetching latest customers to find new record...');
+            const latestCustomers = await new Promise(resolve => {
+              google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(err => resolve({ success: false, error: err.message }))
+                .getCustomersForClient();
+            });
+            
+            if (latestCustomers.success) {
+              const foundCustomer = latestCustomers.data.find(c => 
+                c.name === customerData.name &&
+                c.address === customerData.address
+              );
+              
+              if (foundCustomer) {
+                customerInfo = foundCustomer;
+                console.log('Found newly created customer:', customerInfo);
+              } else {
+                throw new Error('Could not find newly created customer');
+              }
+            } else {
+              throw new Error('Failed to fetch latest customers');
+            }
+          } else {
+            if (!customerResponse.success) {
+              throw new Error(customerResponse.error || 'Failed to create customer');
+            }
+            customerInfo = customerResponse.data;
+            console.log('Created customer with direct response:', customerInfo);
+          }
+          
+        } catch (error) {
+          console.error('Error in customer creation:', error);
+          throw error;
+        }
+      } else {
+        customerInfo = customers.find(c => c.customerId === selectedCustomerId);
+        if (!customerInfo) {
+          throw new Error('Selected customer not found');
+        }
+      }
+
+      // Step 2: Create Project
+      console.log('Creating project for customer:', customerInfo.customerId);
+      const projectResponse = await new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .createProject({
+            customerId: customerInfo.customerId,
+            projectName: projectData.name,
+            siteLocation: projectData.siteLocation || '',
+            siteNotes: projectData.siteNotes || ''
+          });
+      });
+
+      // Log the project creation response
+      console.log('Project creation response:', projectResponse);
+
+      if (!projectResponse || !projectResponse.success) {
+        throw new Error(projectResponse?.error || 'Failed to create project');
+      }
+      console.log('Created project:', projectResponse.data);
+
+      // Step 3: Format table items for estimate
+      const formattedTableItems = projectData.tableItems.map(item => ({
+        ...item,
+        rate: formatAsCurrency(parseFloat(item.rate)),
+        amount: formatAsCurrency(parseFloat(item.amount))
+      }));
+
+      // Step 4: Create estimate with status
+      const estimateData = {
+        customerId: customerInfo.customerId,
+        projectId: projectResponse.data.projectId,
+        projectFolderId: projectResponse.data.folders.estimates,
+        customerName: customerInfo.name,
+        customerAddress: customerInfo.address,
+        customerCity: customerInfo.city,
+        customerState: customerInfo.state,
+        customerZip: customerInfo.zip,
+        customerEmail: customerInfo.email,
+        customerPhone: customerInfo.phone,
+        projectName: projectData.name,
+        siteLocation: projectData.siteLocation || customerInfo.address,
+        siteNotes: projectData.siteNotes || '',
+        scopeOfWork: projectData.scopeOfWork,
+        tableItems: formattedTableItems,
+        totalAmount: projectData.totalAmount,
+        status: status,
+        generateDoc: true // <--- Added here
+      };
+
+      // Log additional details
+      console.log('Project folders:', projectResponse.data.folders);
+      console.log('Full estimate payload:', estimateData);
+
+      // Log the final estimate data right before creation
+      console.log('Creating estimate with data:', {
+        ...estimateData,
+        projectFolderId: projectResponse.data.folders.estimates
+      });
+
+      const estimateResponse = await new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .createAndSaveEstimate(estimateData);
+      });
+
+      if (!estimateResponse || !estimateResponse.success) {
+        throw new Error(estimateResponse?.error || 'Failed to create estimate');
+      }
+
+      // Create new estimate object for state management
+      console.log('Estimate Response:', estimateResponse);
+      console.log('Document ID from response:', estimateResponse.data?.docId);      
+      const newEstimate = {
+        estimateId: estimateResponse.data?.estimateId,
+        docId: estimateResponse.data?.docId,
+        customerName: customerInfo.name,
+        projectName: projectData.name,
+        totalAmount: projectData.totalAmount,
+        status: status
+      };
+
+      console.log('Created newEstimate object:', newEstimate);
+      
+      // Show success message based on status
+      const messages = {
+        'DRAFT': 'Estimate saved as draft',
+        'PENDING': 'Estimate submitted for review',
+        'PENDING_CUSTOMER': 'Estimate ready to send to customer'
+      };
+
+      showMessage(`✅ ${messages[status]}!`, 'success');
+
+      // Handle different status flows
+      if (status === 'PENDING_CUSTOMER') {
+        setCurrentEstimate(newEstimate);
+        setShowEmailDialog(true);
+      } else {
+        if (estimateResponse.data?.docUrl) {
+          setPreviewUrl(estimateResponse.data.docUrl);
+          window.open(estimateResponse.data.docUrl, '_blank');
+        }
+
+        if (estimateResponse.data?.estimateId) {
+          setEstimateId(estimateResponse.data.estimateId);
+        }
+
+        // Reset form after delay for non-email statuses
+        setTimeout(() => {
+          if (mountedRef.current) resetForm();
+        }, 2000);
+      }
+
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      if (mountedRef.current) {
+        showMessage(error.message || 'Failed to create estimate', 'error');
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Wrapper for Generate & Email action
+  const handleGenerateAndSend = async (e) => {
+    await handleSubmit(e, true);
+  };
+
+  // Reset form state
+  const resetForm = () => {
+    setStep('CUSTOMER_TYPE');
+    setMessage({ text: '', type: '' });
+    setLoading(false);
+    setIsNewCustomer(false);
+    setSelectedCustomerId('');
+    setCustomerData({
+      name: '', address: '', city: '', state: '', zip: '',
+      email: '', phone: ''
+    });
+    setProjectData({
+      name: '', siteLocation: '', siteNotes: '', scopeOfWork: '',
+      tableItems: [{ itemService: '', description: '', qtyHours: '', rate: '', amount: '' }],
+      totalAmount: 0
+    });
+    setPreviewUrl('');
+    setDocumentGenerated(false);
+    setEstimateId('');
+  };
+
+  // Render functions for the steps
+  const renderCustomerTypeStep = () => {
+    return React.createElement('div', { className: 'space-y-4' },
+      React.createElement('h3', { className: 'text-lg font-medium' }, 'Select Customer Type'),
+      React.createElement('div', { className: 'space-y-2' },
+        React.createElement('button', {
+          onClick: () => { setIsNewCustomer(false); setStep('CUSTOMER_DETAILS'); },
+          className: 'w-full p-4 text-left border rounded hover:bg-gray-50'
+        }, 'Existing Customer'),
+        React.createElement('button', {
+          onClick: () => { setIsNewCustomer(true); setStep('CUSTOMER_DETAILS'); },
+          className: 'w-full p-4 text-left border rounded hover:bg-gray-50'
+        }, 'New Customer')
+      )
+    );
+  };
+
+  const renderCustomerDetailsStep = () => {
+    if (isNewCustomer) {
       return React.createElement('div', { className: 'space-y-4' },
-        // Project Name
+        React.createElement('h3', { className: 'text-lg font-medium' }, 'Customer Information'),
+        // Customer Name
         React.createElement('div', null,
-          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Project Name'),
+          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Customer Name'),
           React.createElement('input', {
             type: 'text',
-            value: projectData.name,
-            onChange: e => setProjectData(prev => ({ ...prev, name: e.target.value })),
+            value: customerData.name,
+            onChange: e => setCustomerData(prev => ({ ...prev, name: e.target.value })),
             className: 'w-full p-2 border rounded',
             required: true
           })
         ),
-        // Site Location
+        // Address
         React.createElement('div', null,
-          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Site Location (if different from customer address)'),
-          React.createElement('textarea', {
-            value: projectData.siteLocation,
-            onChange: e => setProjectData(prev => ({ ...prev, siteLocation: e.target.value })),
-            className: 'w-full p-2 border rounded h-20'
+          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Address'),
+          React.createElement('input', {
+            type: 'text',
+            value: customerData.address,
+            onChange: e => setCustomerData(prev => ({ ...prev, address: e.target.value })),
+            className: 'w-full p-2 border rounded',
+            required: true
           })
         ),
-        // Site Notes
-        React.createElement('div', null,
-          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Site Notes'),
-          React.createElement('textarea', {
-            value: projectData.siteNotes,
-            onChange: e => setProjectData(prev => ({ ...prev, siteNotes: e.target.value })),
-            className: 'w-full p-2 border rounded h-20',
-            placeholder: 'Any special instructions or notes about the site'
-          })
-        ),
-        // Scope of Work
-        React.createElement('div', null,
-          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Scope of Work'),
-          React.createElement('textarea', {
-            value: projectData.scopeOfWork,
-            onChange: e => setProjectData(prev => ({ ...prev, scopeOfWork: e.target.value })),
-            className: 'w-full p-2 border rounded h-32',
-            required: true,
-            placeholder: 'Describe the overall scope of work'
-          })
-        ),
-        // Table Items for Services
-        React.createElement('div', { className: 'space-y-2' },
-          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Service Items'),
-          projectData.tableItems.map((item, index) =>
-            React.createElement('div', { key: index, className: 'border p-2 rounded space-y-2' },
-              // Service
-              React.createElement('div', null,
-                React.createElement('label', { className: 'block text-sm font-medium' }, 'Service'),
-                React.createElement('input', {
-                  type: 'text',
-                  value: item.itemService,
-                  onChange: e => {
-                    setProjectData(prev => {
-                      const updatedItems = [...prev.tableItems];
-                      updatedItems[index].itemService = e.target.value;
-                      return { ...prev, tableItems: updatedItems };
-                    });
-                  },
-                  className: 'w-full p-2 border rounded'
-                })
-              ),
-              // Description
-              React.createElement('div', null,
-                React.createElement('label', { className: 'block text-sm font-medium' }, 'Description'),
-                React.createElement('input', {
-                  type: 'text',
-                  value: item.description,
-                  onChange: e => {
-                    setProjectData(prev => {
-                      const updatedItems = [...prev.tableItems];
-                      updatedItems[index].description = e.target.value;
-                      return { ...prev, tableItems: updatedItems };
-                    });
-                  },
-                  className: 'w-full p-2 border rounded'
-                })
-              ),
-              // Qty/Hours and Rate
-              React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
-                React.createElement('div', null,
-                  React.createElement('label', { className: 'block text-sm font-medium' }, 'Qty/Hours'),
-                  React.createElement('input', {
-                    type: 'number',
-                    value: item.qtyHours,
-                    onChange: e => handleQtyInput(index, e.target.value),
-                    className: 'w-full p-2 border rounded'
-                  })
-                ),
-                React.createElement('div', null,
-                  React.createElement('label', { className: 'block text-sm font-medium' }, 'Rate'),
-                  React.createElement('input', {
-                    type: 'text',
-                    value: item.rate,
-                    onChange: e => handleCurrencyInput(index, e.target.value),
-                    className: 'w-full p-2 border rounded',
-                    placeholder: '0.00'
-                  })
-                )
-              ),
-              // Calculated Amount
-              React.createElement('div', null,
-                React.createElement('span', { className: 'text-sm text-gray-500' }, `Amount: ${formatAsCurrency(item.amount)}`)
-              ),
-              // Remove item button (if more than one)
-              index > 0 && React.createElement('button', {
-                onClick: () => {
-                  setProjectData(prev => {
-                    const updatedItems = prev.tableItems.filter((_, i) => i !== index);
-                    return { ...prev, tableItems: updatedItems, totalAmount: calculateTotalAmount(updatedItems) };
-                  });
-                },
-                className: 'p-2 text-red-600 hover:bg-red-50 rounded'
-              }, 'Remove')
-            )
+        // City, State, ZIP
+        React.createElement('div', { className: 'grid grid-cols-3 gap-4' },
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'City'),
+            React.createElement('input', {
+              type: 'text',
+              value: customerData.city,
+              onChange: e => setCustomerData(prev => ({ ...prev, city: e.target.value })),
+              className: 'w-full p-2 border rounded',
+              required: true
+            })
           ),
-          // Add new item button
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'State'),
+            React.createElement('input', {
+              type: 'text',
+              value: customerData.state,
+              onChange: e => setCustomerData(prev => ({ ...prev, state: e.target.value })),
+              className: 'w-full p-2 border rounded',
+              maxLength: 2,
+              required: true
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'ZIP'),
+            React.createElement('input', {
+              type: 'text',
+              value: customerData.zip,
+              onChange: e => setCustomerData(prev => ({
+                ...prev,
+                zip: e.target.value.replace(/\D/g, '').slice(0, 5)
+              })),
+              className: 'w-full p-2 border rounded',
+              maxLength: 5,
+              required: true
+            })
+          )
+        ),
+        // Email and Phone
+        React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Email'),
+            React.createElement('input', {
+              type: 'email',
+              value: customerData.email,
+              onChange: e => setCustomerData(prev => ({ ...prev, email: e.target.value })),
+              className: 'w-full p-2 border rounded'
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Phone'),
+            React.createElement('input', {
+              type: 'tel',
+              value: customerData.phone,
+              onChange: e => setCustomerData(prev => ({
+                ...prev,
+                phone: formatPhoneNumber(e.target.value)
+              })),
+              className: 'w-full p-2 border rounded',
+              placeholder: '(555) 555-5555'
+            })
+          )
+        ),
+        // Navigation buttons
+        React.createElement('div', { className: 'flex space-x-4 pt-6' },
+          React.createElement('button', {
+            onClick: () => setStep('CUSTOMER_TYPE'),
+            className: 'flex-1 p-3 border rounded hover:bg-gray-50'
+          }, 'Back'),
           React.createElement('button', {
             onClick: () => {
-              setProjectData(prev => ({
-                ...prev,
-                tableItems: [...prev.tableItems, { itemService: '', description: '', qtyHours: '', rate: '', amount: '' }]
-              }));
+              if (validateCustomerData()) {
+                setStep('PROJECT_DETAILS');
+              } else {
+                showMessage('Please fill in all required fields correctly', 'error');
+              }
             },
-            className: 'w-full p-2 border border-dashed rounded hover:bg-gray-50'
-          }, '+ Add Service Item')
-        ),
-        // Display Total Amount
-        React.createElement('div', { className: 'text-lg font-medium' },
-          `Total Amount: ${formatAsCurrency(projectData.totalAmount)}`
-        ),
-        // Navigation buttons with EstimateActions
-        React.createElement('div', { className: 'flex justify-between pt-6' },
-          React.createElement('button', {
-            onClick: () => setStep('CUSTOMER_DETAILS'),
-            className: 'px-6 py-3 border rounded hover:bg-gray-50'
-          }, 'Back'),
-          React.createElement(EstimateActions, {
-            onSubmit: handleSubmit,
-            disabled: !validateProjectData(),
-            loading: loading
-          })
+            className: 'flex-1 p-3 bg-blue-600 text-white rounded hover:bg-blue-700'
+          }, 'Next')
         )
       );
-    };
-
-    // Main render – wraps the existing content and adds the Email Dialog
-    return React.createElement('div', null, [
-      React.createElement('div', { className: 'max-w-2xl mx-auto p-4' },
-        React.createElement('div', { className: 'bg-white shadow rounded-lg p-6' },
-          React.createElement('h2', { className: 'text-2xl font-bold mb-4' }, 'Create Estimate'),
-          message.text && React.createElement('div', {
-            className: `mb-4 p-4 rounded ${
-              message.type === 'success' ? 'bg-green-100 text-green-700' :
-              message.type === 'info' ? 'bg-blue-100 text-blue-700' :
-              'bg-red-100 text-red-700'
-            }`
-          }, message.text),
-          step === 'CUSTOMER_TYPE'
-            ? renderCustomerTypeStep()
-            : step === 'CUSTOMER_DETAILS'
-              ? renderCustomerDetailsStep()
-              : renderProjectDetailsStep()
+    } else {
+      // Existing customer selection
+      return React.createElement('div', { className: 'space-y-4' },
+        React.createElement('div', null,
+          React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Select Customer'),
+          React.createElement('select', {
+            value: selectedCustomerId,
+            onChange: e => setSelectedCustomerId(e.target.value),
+            className: 'w-full p-2 border rounded',
+            required: true
+          },
+            React.createElement('option', { value: '' }, 'Select Customer'),
+            customers.map(customer =>
+              React.createElement('option', {
+                key: customer.customerId,
+                value: customer.customerId
+              }, `${customer.name} (${customer.customerId})`)
+            )
+          )
+        ),
+        React.createElement('div', { className: 'flex space-x-4 pt-6' },
+          React.createElement('button', {
+            onClick: () => setStep('CUSTOMER_TYPE'),
+            className: 'flex-1 p-3 border rounded hover:bg-gray-50'
+          }, 'Back'),
+          React.createElement('button', {
+            onClick: () => {
+              if (validateCustomerData()) {
+                setStep('PROJECT_DETAILS');
+              } else {
+                showMessage('Please select a customer', 'error');
+              }
+            },
+            disabled: !selectedCustomerId,
+            className: `flex-1 p-3 rounded text-white ${!selectedCustomerId ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`
+          }, 'Next')
         )
-      ),
-      React.createElement(EstimateEmailDialog, {
-        isOpen: showEmailDialog,
-        onClose: () => setShowEmailDialog(false),
-        estimate: currentEstimate,
-        onSend: handleSendEmail,
-        defaultEmail: customerData.email || ''
-      })
-    ]);
+      );
+    }
   };
 
-  // Now define ESTIMATE_WORKFLOW only if not already defined
-  if (typeof window.ESTIMATE_WORKFLOW === 'undefined') {
-    window.ESTIMATE_WORKFLOW = {
-      steps: ["customerSelection", "projectDetails", "estimateDetails", "review"],
-      allowBack: true,
-      validateStep: true
-    };
-  }
+  const renderProjectDetailsStep = () => {
+    return React.createElement('div', { className: 'space-y-4' },
+      // Project Name
+      React.createElement('div', null,
+        React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Project Name'),
+        React.createElement('input', {
+          type: 'text',
+          value: projectData.name,
+          onChange: e => setProjectData(prev => ({ ...prev, name: e.target.value })),
+          className: 'w-full p-2 border rounded',
+          required: true
+        })
+      ),
+      // Site Location
+      React.createElement('div', null,
+        React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Site Location (if different from customer address)'),
+        React.createElement('textarea', {
+          value: projectData.siteLocation,
+          onChange: e => setProjectData(prev => ({ ...prev, siteLocation: e.target.value })),
+          className: 'w-full p-2 border rounded h-20'
+        })
+      ),
+      // Site Notes
+      React.createElement('div', null,
+        React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Site Notes'),
+        React.createElement('textarea', {
+          value: projectData.siteNotes,
+          onChange: e => setProjectData(prev => ({ ...prev, siteNotes: e.target.value })),
+          className: 'w-full p-2 border rounded h-20',
+          placeholder: 'Any special instructions or notes about the site'
+        })
+      ),
+      // Scope of Work
+      React.createElement('div', null,
+        React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Scope of Work'),
+        React.createElement('textarea', {
+          value: projectData.scopeOfWork,
+          onChange: e => setProjectData(prev => ({ ...prev, scopeOfWork: e.target.value })),
+          className: 'w-full p-2 border rounded h-32',
+          required: true,
+          placeholder: 'Describe the overall scope of work'
+        })
+      ),
+      // Table Items for Services
+      React.createElement('div', { className: 'space-y-2' },
+        React.createElement('label', { className: 'block text-sm font-medium mb-1' }, 'Service Items'),
+        projectData.tableItems.map((item, index) =>
+          React.createElement('div', { key: index, className: 'border p-2 rounded space-y-2' },
+            // Service
+            React.createElement('div', null,
+              React.createElement('label', { className: 'block text-sm font-medium' }, 'Service'),
+              React.createElement('input', {
+                type: 'text',
+                value: item.itemService,
+                onChange: e => {
+                  setProjectData(prev => {
+                    const updatedItems = [...prev.tableItems];
+                    updatedItems[index].itemService = e.target.value;
+                    return { ...prev, tableItems: updatedItems };
+                  });
+                },
+                className: 'w-full p-2 border rounded'
+              })
+            ),
+            // Description
+            React.createElement('div', null,
+              React.createElement('label', { className: 'block text-sm font-medium' }, 'Description'),
+              React.createElement('input', {
+                type: 'text',
+                value: item.description,
+                onChange: e => {
+                  setProjectData(prev => {
+                    const updatedItems = [...prev.tableItems];
+                    updatedItems[index].description = e.target.value;
+                    return { ...prev, tableItems: updatedItems };
+                  });
+                },
+                className: 'w-full p-2 border rounded'
+              })
+            ),
+            // Qty/Hours and Rate
+            React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-sm font-medium' }, 'Qty/Hours'),
+                React.createElement('input', {
+                  type: 'number',
+                  value: item.qtyHours,
+                  onChange: e => handleQtyInput(index, e.target.value),
+                  className: 'w-full p-2 border rounded'
+                })
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-sm font-medium' }, 'Rate'),
+                React.createElement('input', {
+                  type: 'text',
+                  value: item.rate,
+                  onChange: e => handleCurrencyInput(index, e.target.value),
+                  className: 'w-full p-2 border rounded',
+                  placeholder: '0.00'
+                })
+              )
+            ),
+            // Calculated Amount
+            React.createElement('div', null,
+              React.createElement('span', { className: 'text-sm text-gray-500' }, `Amount: ${formatAsCurrency(item.amount)}`)
+            ),
+            // Remove item button (if more than one)
+            index > 0 && React.createElement('button', {
+              onClick: () => {
+                setProjectData(prev => {
+                  const updatedItems = prev.tableItems.filter((_, i) => i !== index);
+                  return { ...prev, tableItems: updatedItems, totalAmount: calculateTotalAmount(updatedItems) };
+                });
+              },
+              className: 'p-2 text-red-600 hover:bg-red-50 rounded'
+            }, 'Remove')
+          )
+        ),
+        // Add new item button
+        React.createElement('button', {
+          onClick: () => {
+            setProjectData(prev => ({
+              ...prev,
+              tableItems: [...prev.tableItems, { itemService: '', description: '', qtyHours: '', rate: '', amount: '' }]
+            }));
+          },
+          className: 'w-full p-2 border border-dashed rounded hover:bg-gray-50'
+        }, '+ Add Service Item')
+      ),
+      // Display Total Amount
+      React.createElement('div', { className: 'text-lg font-medium' },
+        `Total Amount: ${formatAsCurrency(projectData.totalAmount)}`
+      ),
+      // Navigation buttons with EstimateActions
+      React.createElement('div', { className: 'flex justify-between pt-6' },
+        React.createElement('button', {
+          onClick: () => setStep('CUSTOMER_DETAILS'),
+          className: 'px-6 py-3 border rounded hover:bg-gray-50'
+        }, 'Back'),
+        React.createElement(EstimateActions, {
+          onSubmit: handleSubmit,
+          disabled: !validateProjectData(),
+          loading: loading
+        })
+      )
+    );
+  };
 
-  // Define the WORKFLOW_STEPS once
-  if (typeof window.WORKFLOW_STEPS === 'undefined') {
-    window.WORKFLOW_STEPS = {
-      customerSelection: {
-        order: 1,
-        validate: const validateCustomerData = window.validateCustomerData;,
-        next: 'projectDetails'
-      },
-      projectDetails: {
-        order: 2,
-        validate: validateProjectData,
-        next: 'estimateDetails'
-      },
-      estimateDetails: {
-        order: 3,
-        validate: localValidateEstimateData,
-        next: 'review'
-      },
-      review: {
-        order: 4,
-        validate: () => true,
-        isLast: true
-      }
-    };
-  }
+  // Main render – wraps the existing content and adds the Email Dialog
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'max-w-2xl mx-auto p-4' },
+      React.createElement('div', { className: 'bg-white shadow rounded-lg p-6' },
+        React.createElement('h2', { className: 'text-2xl font-bold mb-4' }, 'Create Estimate'),
+        message.text && React.createElement('div', {
+          className: `mb-4 p-4 rounded ${
+            message.type === 'success' ? 'bg-green-100 text-green-700' :
+            message.type === 'info' ? 'bg-blue-100 text-blue-700' :
+            'bg-red-100 text-red-700'
+          }`
+        }, message.text),
+        step === 'CUSTOMER_TYPE'
+          ? renderCustomerTypeStep()
+          : step === 'CUSTOMER_DETAILS'
+            ? renderCustomerDetailsStep()
+            : renderProjectDetailsStep()
+      )
+    ),
+    React.createElement(EstimateEmailDialog, {
+      isOpen: showEmailDialog,
+      onClose: () => setShowEmailDialog(false),
+      estimate: currentEstimate,
+      onSend: handleSendEmail,
+      defaultEmail: customerData.email || ''
+    })
+  );
+};
 
-  // Define STATUS_DISPLAY once
-  if (typeof window.STATUS_DISPLAY === 'undefined') {
-    window.STATUS_DISPLAY = {
-      DRAFT: {
-        color: 'gray',
-        icon: 'edit',
-        label: 'Draft'
-      },
-      PENDING: {
-        color: 'yellow',
-        icon: 'clock',
-        label: 'Pending Review'
-      },
-      APPROVED: {
-        color: 'green',
-        icon: 'check',
-        label: 'Approved'
-      },
-      REJECTED: {
-        color: 'red',
-        icon: 'x',
-        label: 'Rejected'
-      }
-    };
-  }
-
-  // Export to window only if not already defined
-  if (typeof window.EstimateCreator === 'undefined') {
-    window.EstimateCreator = EstimateCreator;
-  }
-}
-
-// Export for both client and server contexts, respecting existing definitions
-if (typeof this !== 'undefined' && typeof this.EstimateCreator === 'undefined') {
-  this.EstimateCreator = window.EstimateCreator || null;
-}
+window.EstimateCreator = EstimateCreator;
 </script>
+
+

@@ -2,10 +2,10 @@
 const CustomerList = ({
   customers,
   onSelectCustomer,
+  onSendEstimate,
   onViewEstimates,
   onFilterChange,
-  onSearch,
-  showMessage
+  onSearch
 }) => {
   // Local state for filters
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -19,273 +19,170 @@ const CustomerList = ({
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-    if (onSearch) onSearch(value);
+    onSearch(value);
   };
 
-  const const handleStatusChange = window.handleStatusChange; = (e) => {
+  const handleStatusChange = (e) => {
     const value = e.target.value;
     setStatusFilter(value);
-    if (onFilterChange) {
-      onFilterChange({ status: value, valueRange: valueRangeFilter });
-    }
+    onFilterChange({ status: value, valueRange: valueRangeFilter });
   };
 
   const handleValueRangeChange = (min, max) => {
     setValueRangeFilter({ min, max });
-    if (onFilterChange) {
-      onFilterChange({ status: statusFilter, valueRange: { min, max } });
+    onFilterChange({ status: statusFilter, valueRange: { min, max } });
+  };
+
+  // Export functionality
+  const exportCustomerData = () => {
+    const exportData = customers.map(customer => ({
+      'Customer ID': customer.customerId,
+      'Name': customer.name,
+      'Email': customer.email,
+      'Phone': customer.phone,
+      'Total Projects': customer.metrics.totalProjects,
+      'Active Projects': customer.metrics.activeProjects,
+      'Total Revenue': customer.metrics.totalRevenue,
+      'Average Project Value': customer.metrics.averageProjectValue,
+      'Last Activity': customer.metrics.lastActivityDate
+    }));
+
+    // Convert to CSV
+    const headers = Object.keys(exportData[0]);
+    const csvContent = [
+      headers.join(','),
+      ...exportData.map(row => 
+        headers.map(header => 
+          JSON.stringify(row[header] || '')
+        ).join(',')
+      )
+    ].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `customer_data_${new Date().toISOString()}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
-  // Permission check function
-  const hasPermission = (action) => {
-    const userRole = window.CONSTANTS.USER_ROLE || 'CREATOR';
-    const permissions = window.CONSTANTS.PERMISSIONS.CUSTOMER[action] || [];
-    return permissions.includes(userRole);
-  };
-
-  // Status badge component
-  const StatusBadge = window.StatusBadge; = ({ status, onStatusChange, disabled }) => {
-    const config = CustomerStatusManager.getStatusConfig(status);
-    const workflow = window.CONSTANTS.workflow.customerManagement;
-    const transitions = workflow.transitions[status] || [];
-
-    return React.createElement('div', { className: 'relative' }, [
-      React.createElement('span', {
-        className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-          bg-${config.color}-100 text-${config.color}-800`
-      }, [
-        React.createElement('span', {
-          className: `mr-1 ${config.icon}`
-        }),
-        status
-      ]),
-      hasPermission('update') && !disabled && transitions.length > 0 && 
-      React.createElement('select', {
-        onChange: (e) => onStatusChange(e.target.value),
-        className: 'ml-2 text-sm border rounded',
-        value: ''
-      }, [
-        React.createElement('option', { value: '' }, 'Change Status'),
-        ...transitions.map(newStatus =>
-          React.createElement('option', { value: newStatus }, newStatus)
-        )
-      ])
-    ]);
-  };
-
-  const handleViewDetails = (customer) => {
-    if (!hasPermission('view')) {
-      showMessage('Insufficient permissions to view customer details', 'error');
-      return;
-    }
-    onSelectCustomer(customer);
-  };
-
-  const const handleStatusChange = window.handleStatusChange; = async (customerId, newStatus, currentStatus) => {
-    if (!hasPermission('update')) {
-      showMessage('Insufficient permissions to update status', 'error');
-      return;
-    }
-  
-    if (!CustomerStatusManager.validateTransition(currentStatus, newStatus)) {
-      showMessage('Invalid status transition', 'error');
-      return;
-    }
-  
-    try {
-      await google.script.run
-        .withSuccessHandler(() => {
-          showMessage('Status updated successfully', 'success');
-          if (onFilterChange) {
-            onFilterChange({ status: statusFilter, valueRange: valueRangeFilter });
-          }
-        })
-        .withFailureHandler(error => {
-          showMessage(error.message || 'Failed to update status', 'error');
-        })
-        .updateCustomerStatus({
-          customerId,
-          newStatus,
-          currentStatus
-        });
-  
-      await logCustomerActivity('STATUS_CHANGE', customerId, {
-        oldStatus: currentStatus,
-        newStatus
-      });
-    } catch (error) {
-      showMessage('Failed to update status', 'error');
-    }
-  };
-
-  return React.createElement('div', { className: 'space-y-4' }, [
-    // Controls Section
-    React.createElement('div', { 
-      className: 'flex justify-between items-center bg-white p-4 rounded-lg shadow-sm'
-    }, [
-      // Search and Filters
-      React.createElement('div', { className: 'flex space-x-4' }, [
+  return React.createElement('div', { className: 'space-y-4' },
+    // Controls
+    React.createElement('div', { className: 'flex justify-between items-center' },
+      React.createElement('div', { className: 'flex space-x-4' },
         // Search Input
         React.createElement('input', {
           type: 'text',
           placeholder: 'Search customers...',
           value: searchTerm,
           onChange: handleSearchChange,
-          className: 'p-2 border rounded-md'
+          className: 'p-2 border rounded'
         }),
         // Status Filter
         React.createElement('select', {
           value: statusFilter,
-          onChange: const handleStatusChange = window.handleStatusChange;,
-          className: 'p-2 border rounded-md'
-        }, [
+          onChange: handleStatusChange,
+          className: 'p-2 border rounded'
+        },
           React.createElement('option', { value: 'All' }, 'All Statuses'),
-          Object.keys(window.CONSTANTS.CUSTOMER_STATUSES).map(status =>
-            React.createElement('option', { 
-              key: status, 
-              value: status 
-            }, status)
-          )
-        ])
-      ])
-    ]),
-
-    // Customer Metrics
-    React.createElement(CustomerMetrics, { customers }),
+          React.createElement('option', { value: 'Active' }, 'Active'),
+          React.createElement('option', { value: 'Inactive' }, 'Inactive')
+        ),
+        // Value Range Filter
+        React.createElement('div', { className: 'flex items-center space-x-2' },
+          React.createElement('input', {
+            type: 'number',
+            placeholder: 'Min Value',
+            value: valueRangeFilter.min || '',
+            onChange: e => handleValueRangeChange(e.target.value, valueRangeFilter.max),
+            className: 'p-2 border rounded w-24'
+          }),
+          React.createElement('span', null, '-'),
+          React.createElement('input', {
+            type: 'number',
+            placeholder: 'Max Value',
+            value: valueRangeFilter.max || '',
+            onChange: e => handleValueRangeChange(valueRangeFilter.min, e.target.value),
+            className: 'p-2 border rounded w-24'
+          })
+        )
+      ),
+      // Action Buttons
+      React.createElement('div', { className: 'flex space-x-2' },
+        React.createElement('button', {
+          onClick: exportCustomerData,
+          className: 'p-2 bg-green-600 text-white rounded hover:bg-green-700'
+        }, 'Export CSV')
+      )
+    ),
 
     // Customer Table
-    React.createElement('div', { 
-      className: 'bg-white shadow overflow-hidden sm:rounded-lg' 
-    }, [
-      React.createElement('table', { 
-        className: 'min-w-full divide-y divide-gray-200' 
-      }, [
-        // Table Headers
-        React.createElement('thead', { className: 'bg-gray-50' }, [
-          React.createElement('tr', null, [
-            'Customer ID',
-            'Name',
-            'Status',
-            'Actions'
-          ].map(header => 
-            React.createElement('th', {
-              key: header,
-              className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase'
-            }, header)
-          ))
-        ]),
-        // Table Body
-        React.createElement('tbody', { 
-          className: 'bg-white divide-y divide-gray-200' 
-        }, customers.map(customer => 
-          React.createElement('tr', { key: customer.CustomerID }, [
-            React.createElement('td', { className: 'px-6 py-4' }, 
-              customer.CustomerID
+    React.createElement('table', { className: 'min-w-full divide-y divide-gray-200' },
+      React.createElement('thead', { className: 'bg-gray-50' },
+        React.createElement('tr', null,
+          ['Customer ID', 'Name', 'Email', 'Phone', 'Projects', 'Total Value', 'Status', 'Actions']
+            .map(header => 
+              React.createElement('th', {
+                key: header,
+                className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+              }, header)
+            )
+        )
+      ),
+      React.createElement('tbody', { className: 'bg-white divide-y divide-gray-200' },
+        customers.map(customer => 
+          React.createElement('tr', { key: customer.customerId },
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.customerId),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.name),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.email || 'N/A'),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, customer.phone || 'N/A'),
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' }, 
+              customer.metrics?.totalProjects || 0
             ),
-            React.createElement('td', { className: 'px-6 py-4' }, 
-              customer.CustomerName
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+              new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+              }).format(customer.metrics?.totalRevenue || 0)
             ),
-            React.createElement('td', { className: 'px-6 py-4' },
-              React.createElement(StatusBadge, {
-                status: customer.Status,
-                key: `status-${customer.CustomerID}`
-              })
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
+              React.createElement('span', {
+                className: `px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  customer.status === 'Active' 
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`
+              }, customer.status)
             ),
-            React.createElement('td', { className: 'px-6 py-4' }, [
-              React.createElement('button', {
-                key: 'view',
-                onClick: () => handleViewDetails(customer),
-                className: 'text-blue-600 hover:text-blue-900 mr-4'
-              }, 'View Details'),
-              React.createElement('button', {
-                key: 'estimates',
-                onClick: () => onViewEstimates(customer),
-                className: 'text-green-600 hover:text-green-900'
-              }, 'Estimates')
-            ])
-          ])
-        ))
-      ])
-    ])
-  ]);
+            React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
+              React.createElement('div', { className: 'flex space-x-4' },
+                React.createElement('button', {
+                  onClick: () => onSelectCustomer(customer),
+                  className: 'text-indigo-600 hover:text-indigo-900'
+                }, 'View'),
+                React.createElement('button', {
+                  onClick: () => onViewEstimates(customer),
+                  className: 'text-blue-600 hover:text-blue-900'
+                }, 'Estimates'),
+                React.createElement('button', {
+                  onClick: () => onSendEstimate(customer.customerId),
+                  className: 'text-green-600 hover:text-green-900'
+                }, 'Send Estimate')
+              )
+            )
+          )
+        )
+      )
+    )
+  );
 };
 
-const CustomerStatusManager = {
-  validateTransition: (currentStatus, newStatus) => {
-    const workflow = window.CONSTANTS.workflow.customerManagement;
-    return workflow.transitions[currentStatus]?.includes(newStatus);
-  },
-
-  getStatusConfig: (status) => {
-    const workflow = window.CONSTANTS.workflow.customerManagement;
-    return workflow.statusDisplay[status] || {
-      color: 'gray',
-      icon: 'circle'
-    };
-  }
-};
-
-const logCustomerActivity = async (action, customerId, details) => {
-  await google.script.run
-    .withFailureHandler(error => console.error('Activity log error:', error))
-    .logActivity({
-      action,
-      moduleType: 'CUSTOMER',
-      referenceId: customerId,
-      details
-    });
-};
-
-const CustomerMetrics = ({ customers }) => {
-  const metrics = {
-    total: customers.length,
-    active: customers.filter(c => c.Status === 'ACTIVE').length,
-    totalRevenue: customers.reduce((sum, c) => sum + (Number(c.TotalRevenue) || 0), 0)
-  };
-
-  return React.createElement('div', {
-    className: 'grid grid-cols-3 gap-4 mb-6'
-  }, [
-    {
-      label: 'Total Customers',
-      value: metrics.total,
-      color: 'blue'
-    },
-    {
-      label: 'Active Customers',
-      value: metrics.active,
-      color: 'green'
-    },
-    {
-      label: 'Total Revenue',
-      value: new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD'
-      }).format(metrics.totalRevenue),
-      color: 'purple'
-    }
-  ].map(metric =>
-    React.createElement('div', {
-      key: metric.label,
-      className: `bg-${metric.color}-50 p-4 rounded-lg`
-    }, [
-      React.createElement('div', {
-        className: 'text-sm text-gray-600'
-      }, metric.label),
-      React.createElement('div', {
-        className: `text-xl font-semibold text-${metric.color}-700`
-      }, metric.value)
-    ])
-  ));
-};
-
-// Export for window
-if (typeof window !== 'undefined') {
-  window.CustomerList = CustomerList;
-}
-
-if (typeof this !== 'undefined') {
-  this.CustomerList = CustomerList;
-}
+// Export to window
+window.CustomerList = CustomerList;
 </script>

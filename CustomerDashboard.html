@@ -1,52 +1,5 @@
 <script>
-const CustomerDashboard = ({ customer, analytics, onSelectCustomer }) => {
-  const [state, setState] = React.useState({
-    currentView: window.CONSTANTS.CUSTOMER_MODULE.VIEWS.DASHBOARD,
-    loading: false,
-    error: null
-  });
-
-  const mountedRef = React.useRef(true);
-
-  React.useEffect(() => {
-    if (!window.CONSTANTS.PERMISSIONS.CUSTOMER.dashboard?.view?.includes(
-      window.CONSTANTS.USER_ROLE
-    )) {
-      setState(prev => ({ ...prev, error: 'Insufficient permissions' }));
-      return;
-    }
-    
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const handleViewChange = (viewId) => {
-    if (!window.CONSTANTS.PERMISSIONS.CUSTOMER[viewId]?.view?.includes(
-      window.CONSTANTS.USER_ROLE
-    )) {
-      setState(prev => ({ ...prev, error: 'Insufficient permissions' }));
-      return;
-    }
-
-    setState(prev => ({ ...prev, currentView: viewId }));
-    
-    google.script.run
-      .withSuccessHandler(() => {
-        if (!mountedRef.current) return;
-      })
-      .withFailureHandler(error => {
-        if (!mountedRef.current) return;
-        setState(prev => ({ ...prev, error: error.message }));
-      })
-      .logActivity({
-        action: 'VIEW_CHANGE',
-        moduleType: 'CUSTOMER',
-        referenceId: customer.CustomerID,
-        details: { view: viewId }
-      });
-  };
-
+const CustomerDashboard = ({ analytics, onSelectCustomer }) => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -54,42 +7,7 @@ const CustomerDashboard = ({ customer, analytics, onSelectCustomer }) => {
     }).format(amount);
   };
 
-  const navigationItems = Object.entries(window.CONSTANTS.CUSTOMER_MODULE.VIEWS)
-    .map(([id, label]) => ({
-      id,
-      label,
-      icon: getViewIcon(id),
-      enabled: window.CONSTANTS.PERMISSIONS.CUSTOMER[id]?.view?.includes(
-        window.CONSTANTS.USER_ROLE
-      )
-    }));
-
-  return React.createElement('div', { className: 'space-y-6' }, [
-    // Navigation
-    React.createElement('nav', {
-      className: 'bg-white shadow rounded-lg p-4 mb-6'
-    }, [
-      React.createElement('div', {
-        className: 'flex space-x-4'
-      }, navigationItems.map(item =>
-        React.createElement('button', {
-          key: item.id,
-          onClick: () => handleViewChange(item.id),
-          disabled: !item.enabled,
-          className: `px-3 py-2 rounded-md text-sm font-medium ${
-            state.currentView === item.id
-              ? 'bg-gray-900 text-white'
-              : 'text-gray-700 hover:bg-gray-100'
-          } ${!item.enabled ? 'opacity-50 cursor-not-allowed' : ''}`
-        }, item.label)
-      ))
-    ]),
-
-    // Error Display
-    state.error && React.createElement('div', {
-      className: 'bg-red-50 text-red-600 p-4 rounded-md'
-    }, state.error),
-
+  return React.createElement('div', { className: 'space-y-6' },
     // Summary Cards
     React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-4' },
       [
@@ -191,23 +109,9 @@ const CustomerDashboard = ({ customer, analytics, onSelectCustomer }) => {
         )
       )
     )
-  ]);
+  );
 };
 
-// Helper function for view icons
-const getViewIcon = (viewId) => {
-  const icons = {
-    dashboard: 'home',
-    details: 'user',
-    estimates: 'file-text',
-    projects: 'briefcase',
-    documents: 'folder',
-    contacts: 'users',
-    financials: 'dollar-sign',
-    communications: 'mail'
-  };
-  return icons[viewId] || 'circle';
-};
-
+// Export to window
 window.CustomerDashboard = CustomerDashboard;
 </script>

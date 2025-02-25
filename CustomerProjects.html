@@ -7,49 +7,8 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [viewMode, setViewMode] = React.useState('list'); // 'list', 'details', 'timeline'
   const [filterStatus, setFilterStatus] = React.useState('all');
-  const [error, setError] = React.useState(null);
 
   const mountedRef = React.useRef(true);
-
-  // Match blueprint status flow - wrap in local scope to avoid global conflict
-  const localStatusConfig = {
-    PENDING: {
-      color: 'yellow',
-      label: 'Pending',
-      actions: ['APPROVED', 'CANCELLED'],
-      icon: 'clock'
-    },
-    APPROVED: {
-      color: 'green',
-      label: 'Approved',
-      actions: ['IN_PROGRESS', 'CANCELLED'],
-      icon: 'check'
-    },
-    IN_PROGRESS: {
-      color: 'blue',
-      label: 'In Progress',
-      actions: ['COMPLETED', 'CANCELLED'],
-      icon: 'play'
-    },
-    COMPLETED: {
-      color: 'purple',
-      label: 'Completed',
-      actions: ['CLOSED'],
-      icon: 'flag'
-    },
-    CANCELLED: {
-      color: 'red',
-      label: 'Cancelled',
-      actions: [],
-      icon: 'x'
-    },
-    CLOSED: {
-      color: 'gray',
-      label: 'Closed',
-      actions: [],
-      icon: 'archive'
-    }
-  };
 
   // Lifecycle
   React.useEffect(() => {
@@ -91,65 +50,26 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
   };
 
   // Status update handler
-  const validateProjectStatusTransition = (currentStatus, newStatus) => {
-    const workflow = window.CONSTANTS.workflow.projectManagement;
-    const allowedTransitions = workflow.transitions[currentStatus] || [];
-    return allowedTransitions.includes(newStatus);
-  };
-
   const handleStatusUpdate = async (projectId, newStatus) => {
-    if (!window.CONSTANTS.PERMISSIONS.PROJECT.update?.includes(
-      window.CONSTANTS.USER_ROLE
-    )) {
-      showMessage('Insufficient permissions', 'error');
-      return;
-    }
-
-    const project = projects.find(p => p.projectId === projectId);
-    if (!validateProjectStatusTransition(project.status, newStatus)) {
-      showMessage('Invalid status transition', 'error');
-      return;
-    }
-
-    setLoading(true);
-    
     try {
-      await google.script.run
-        .withSuccessHandler(() => {
-          if (!mountedRef.current) return;
-          
-          // Log activity
-          google.script.run
-            .withFailureHandler(console.error)
-            .logActivity({
-              action: 'STATUS_CHANGE',
-              moduleType: 'PROJECT',
-              referenceId: projectId,
-              details: { 
-                oldStatus: project.status,
-                newStatus,
-                customerId: customer.customerId 
-              }
-            });
+      const response = await new Promise(resolve => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(err => resolve({ success: false, error: err.message }))
+          .updateProjectStatus({
+            projectId,
+            newStatus
+          });
+      });
 
-          setProjects(prev => 
-            prev.map(p => p.projectId === projectId ? { ...p, status: newStatus } : p)
-          );
-          showMessage('Status updated successfully', 'success');
-        })
-        .withFailureHandler(error => {
-          if (!mountedRef.current) return;
-          showMessage(error.message || 'Failed to update status', 'error');
-        })
-        .updateProjectStatus({
-          projectId,
-          newStatus,
-          customerId: customer.customerId
-        });
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
+      if (response.success) {
+        showMessage('Project status updated successfully', 'success');
+        fetchProjects(); // Refresh project list
+      } else {
+        showMessage(response.error || 'Failed to update project status', 'error');
       }
+    } catch (error) {
+      showMessage('Failed to update project status', 'error');
     }
   };
 
@@ -161,7 +81,12 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
 
   // Calculate project metrics
   const projectMetrics = React.useMemo(() => {
-    return calculateMetrics(projects);
+    return {
+      total: projects.length,
+      active: projects.filter(p => p.status === 'IN_PROGRESS').length,
+      completed: projects.filter(p => p.status === 'COMPLETED').length,
+      totalValue: projects.reduce((sum, p) => sum + (p.value || 0), 0)
+    };
   }, [projects]);
 
   // Render methods
@@ -170,15 +95,13 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
       { title: 'Total Projects', value: projectMetrics.total },
       { title: 'Active Projects', value: projectMetrics.active },
       { title: 'Completed Projects', value: projectMetrics.completed },
-      { title: 'Pending Projects', value: projectMetrics.pending },
       { 
         title: 'Total Value', 
         value: new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD'
         }).format(projectMetrics.totalValue)
-      },
-      { title: 'Average Duration', value: `${projectMetrics.avgDuration.toFixed(2)} days` }
+      }
     ];
 
     return React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-4 mb-6' },
@@ -264,32 +187,14 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
                   }).format(project.value || 0)
                 ),
                 React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
-                  React.createElement('div', { className: 'flex space-x-2' },
-                    localStatusConfig[project.status].actions.map(action =>
-                      React.createElement('button', {
-                        key: action,
-                        onClick: () => handleStatusUpdate(project.projectId, action.toUpperCase()),
-                        className: 'text-sm px-2 py-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
-                      }, action)
-                    )
-                  )
-                ),
-                React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap' },
-                  React.createElement('div', { className: 'flex space-x-2' },
-                    checkModuleAccess(project.status).map(module =>
-                      React.createElement('button', {
-                        key: module,
-                        onClick: () => handleModuleNavigation(project.projectId, module),
-                        className: 'text-sm px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }, module)
-                    )
-                  )
-                ),
-                // This line uses the global StatusBadge
-                React.createElement(window.StatusBadge, {
-                  status: project.Status,
-                  key: `status-${project.ID}`
-                })
+                  React.createElement('button', {
+                    onClick: () => {
+                      setSelectedProject(project);
+                      setViewMode('details');
+                    },
+                    className: 'text-indigo-600 hover:text-indigo-900'
+                  }, 'View Details')
+                )
               )
             )
           )
@@ -321,103 +226,6 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
   );
 };
 
-// ErrorBoundary component
-function ProjectErrorBoundary(props) {
-  var [hasError, setHasError] = React.useState(false);
-  var [error, setError] = React.useState(null);
-
-  React.useEffect(function() {
-    if (props.error) {
-      setHasError(true);
-      setError(props.error);
-    }
-  }, [props.error]);
-
-  if (hasError) {
-    return React.createElement('div', {
-      className: 'rounded-md bg-red-50 p-4 my-4'
-    }, [
-      React.createElement('h3', {
-        className: 'text-red-800 font-medium'
-      }, 'Error'),
-      React.createElement('p', {
-        className: 'text-red-700 mt-2'
-      }, error?.message || 'An error occurred')
-    ]);
-  }
-
-  return props.children;
-}
-
 // Export to window
-if (typeof this !== 'undefined') {
-  this.CustomerProjects = CustomerProjects;
-}
-
-const checkModuleAccess = (status) => {
-  const workflow = window.CONSTANTS.workflow.projectManagement;
-  const allowedModules = workflow.moduleAccess[status] || [];
-  return allowedModules;
-};
-
-// Don't redefine StatusBadge globally, use the already registered one
-// Use our local StatusBadge component for internal use only
-const ProjectStatusBadge = ({ status }) => {
-  const localConfig = {
-    PENDING: {
-      color: 'yellow',
-      label: 'Pending',
-      icon: 'clock'
-    },
-    APPROVED: {
-      color: 'green',
-      label: 'Approved',
-      icon: 'check'
-    },
-    IN_PROGRESS: {
-      color: 'blue',
-      label: 'In Progress',
-      icon: 'play'
-    },
-    COMPLETED: {
-      color: 'purple',
-      label: 'Completed',
-      icon: 'flag'
-    },
-    CANCELLED: {
-      color: 'red',
-      label: 'Cancelled',
-      icon: 'x'
-    },
-    CLOSED: {
-      color: 'gray',
-      label: 'Closed',
-      icon: 'archive'
-    }
-  };
-  
-  const config = localConfig[status] || localConfig.PENDING;
-  
-  return React.createElement('span', {
-    className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-      bg-${config.color}-100 text-${config.color}-800`
-  }, [
-    React.createElement('span', {
-      className: `mr-1 ${config.icon}`
-    }),
-    config.label
-  ]);
-};
-
-const calculateMetrics = (projects) => {
-  return {
-    total: projects.length,
-    active: projects.filter(p => p.status === 'IN_PROGRESS').length,
-    completed: projects.filter(p => p.status === 'COMPLETED').length,
-    pending: projects.filter(p => p.status === 'PENDING').length,
-    totalValue: projects.reduce((sum, p) => sum + (Number(p.value) || 0), 0),
-    avgDuration: projects.length ? 
-      projects.reduce((sum, p) => sum + (p.duration || 0), 0) / projects.length : 0
-  };
-};
+window.CustomerProjects = CustomerProjects;
 </script>

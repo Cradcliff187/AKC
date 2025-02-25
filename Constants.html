@@ -13,7 +13,7 @@ var CONSTANTS = {
   },
 
   // Consolidated Status Configuration
-  const STATUS_CONFIG = window.STATUS_CONFIG;: {
+  STATUS_CONFIG: {
     ESTIMATE: {
       DRAFT: { color: 'gray', icon: 'edit', label: 'Draft' },
       PENDING: { color: 'yellow', icon: 'clock', label: 'Pending Review' },
@@ -441,7 +441,7 @@ if (typeof this !== 'undefined') {
 window.addEventListener('DOMContentLoaded', function() {
   var requiredConstants = [
     'ESTIMATE_STATUSES',
-    'const STATUS_CONFIG = window.STATUS_CONFIG;',
+    'STATUS_CONFIG',
     'PERMISSIONS',
     'VALIDATION_RULES',
     'ADDRESS_VALIDATION',
@@ -461,15 +461,117 @@ window.addEventListener('DOMContentLoaded', function() {
   window.dispatchEvent(new Event('constants_loaded'));
 });
 
-if (typeof window.CONSTANTS === 'undefined') {
-  window.CONSTANTS = {
-    const STATUS_CONFIG = window.STATUS_CONFIG;: {
-      // ... status configurations
+// Define validateCustomerData function
+window.validateCustomerData = function(data) {
+  // Validate required fields
+  var requiredFields = ['name', 'email', 'phone'];
+  var missingFields = requiredFields.filter(field => !data[field]);
+  
+  if (missingFields.length > 0) {
+    return {
+      isValid: false,
+      errors: ["Missing required fields: "+(missingFields.join(', '))+""]
+    };
+  }
+
+  return {
+    isValid: true,
+    errors: []
+  };
+};
+
+// Add safe initialize function for the initializeApp to use
+window.safeInitialize = function() {
+  try {
+    // Check for required global objects
+    if (typeof CONSTANTS !== 'undefined') {
+      // Verify critical properties
+      return {
+        success: true,
+        constants: {
+          defined: true
+        }
+      };
+    } else {
+      console.error('CONSTANTS not defined');
+      return {
+        success: false,
+        constants: {
+          defined: false
+        }
+      };
+    }
+  } catch (error) {
+    console.error('Initialization error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Define AKC namespace for additional utilities
+(function(window) {
+  if (!window.AKC) { 
+    window.AKC = {}; 
+  }
+  
+  // Define STATUS_CONFIG
+  window.AKC.STATUS_CONFIG = {
+    ESTIMATE: {
+      DRAFT: { label: 'Draft', color: 'secondary', icon: 'pencil-alt' },
+      SENT: { label: 'Sent', color: 'info', icon: 'paper-plane' },
+      APPROVED: { label: 'Approved', color: 'success', icon: 'check-circle' },
+      REJECTED: { label: 'Rejected', color: 'danger', icon: 'times-circle' },
+      ON_HOLD: { label: 'On Hold', color: 'warning', icon: 'pause-circle' }
     },
-    const validateCustomerData = window.validateCustomerData;: function(data) {
-      // ... validation logic
+    PROJECT: {
+      PLANNING: { label: 'Planning', color: 'primary', icon: 'clipboard-list' },
+      ACTIVE: { label: 'Active', color: 'success', icon: 'hammer' },
+      ON_HOLD: { label: 'On Hold', color: 'warning', icon: 'pause-circle' },
+      COMPLETED: { label: 'Completed', color: 'info', icon: 'check-double' },
+      ARCHIVED: { label: 'Archived', color: 'secondary', icon: 'archive' }
     }
   };
-  Object.freeze(window.CONSTANTS);
-}
+  
+  // Define workflow transitions
+  window.AKC.workflow = {
+    estimateManagement: {
+      transitions: {
+        DRAFT: ['SENT', 'ON_HOLD'],
+        SENT: ['APPROVED', 'REJECTED', 'ON_HOLD'],
+        APPROVED: ['ON_HOLD'],
+        REJECTED: ['DRAFT', 'ON_HOLD', 'ARCHIVED'],
+        ON_HOLD: ['DRAFT', 'SENT', 'APPROVED', 'REJECTED']
+      }
+    }
+  };
+  
+  // Define helper functions
+  window.AKC.validateCustomerData = function(data) {
+    if (!data || typeof data !== 'object') {
+      console.error('Invalid customer data: not an object');
+      return false;
+    }
+    
+    var requiredFields = ['name', 'email', 'phone'];
+    var missingFields = requiredFields.filter(field => !data[field]);
+    
+    if (missingFields.length > 0) {
+      console.error('Missing required customer fields:', missingFields);
+      return false;
+    }
+    
+    return true;
+  };
+  
+  window.AKC.handleStatusChange = function(currentStatus, newStatus, type = 'ESTIMATE') {
+    var workflow = window.AKC.workflow.estimateManagement;
+    if (!workflow.transitions[currentStatus] || !workflow.transitions[currentStatus].includes(newStatus)) {
+      console.error("Invalid status transition from "+(currentStatus)+" to "+(newStatus)+"");
+      return false;
+    }
+    return true;
+  };
+})(window);
 </script>
