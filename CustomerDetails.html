@@ -1,5 +1,5 @@
 <script>
-const STATUS_CONFIG = {
+const const STATUS_CONFIG = window.STATUS_CONFIG; = {
   validateTransition: (currentStatus, newStatus) => {
     const workflow = window.CONSTANTS.workflow.customerManagement;
     return workflow.transitions[currentStatus]?.includes(newStatus);
@@ -28,8 +28,8 @@ const validateAddress = async (address) => {
   return response.data;
 };
 
-const StatusBadge = ({ status, onStatusChange }) => {
-  const config = STATUS_CONFIG.getStatusDisplay(status);
+const StatusBadge = window.StatusBadge; = ({ status, onStatusChange }) => {
+  const config = const STATUS_CONFIG = window.STATUS_CONFIG;.getStatusDisplay(status);
   return React.createElement('div', { className: 'flex items-center space-x-2' }, [
     React.createElement('span', {
       className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
@@ -96,7 +96,7 @@ const CustomerDetails = ({ customer, onBack }) => {
     }
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const const handleStatusChange = window.handleStatusChange; = async (newStatus) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       await google.script.run
@@ -141,7 +141,7 @@ const CustomerDetails = ({ customer, onBack }) => {
         .withFailureHandler(error => {
           throw new Error(error.message || 'Validation failed');
         })
-        .validateCustomerData(state.formData);
+        .const validateCustomerData = window.validateCustomerData;(state.formData);
 
       if (!validation.isValid) {
         throw new Error(validation.errors.join(', '));
@@ -328,7 +328,7 @@ const CustomerDetails = ({ customer, onBack }) => {
       renderField('Company', customer.Company, 'Company')
     ]),
 
-    // Status Section with handleStatusChange
+    // Status Section with const handleStatusChange = window.handleStatusChange;
     React.createElement('div', {
       className: 'mt-6 pt-6 border-t border-gray-200',
       key: 'status'
@@ -338,7 +338,7 @@ const CustomerDetails = ({ customer, onBack }) => {
       }, 'Status'),
       React.createElement(StatusBadge, {
         status: customer.Status,
-        onStatusChange: handleStatusChange
+        onStatusChange: const handleStatusChange = window.handleStatusChange;
       })
     ]),
 
@@ -352,4 +352,3 @@ if (typeof this !== 'undefined') {
   this.CustomerDetails = CustomerDetails;
 }
 </script>
-

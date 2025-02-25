@@ -11,8 +11,8 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
 
   const mountedRef = React.useRef(true);
 
-  // Match blueprint status flow
-  const STATUS_CONFIG = {
+  // Match blueprint status flow - wrap in local scope to avoid global conflict
+  const localStatusConfig = {
     PENDING: {
       color: 'yellow',
       label: 'Pending',
@@ -91,9 +91,9 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
   };
 
   // Status update handler
-  const validateStatusTransition = (currentStatus, newStatus) => {
+  const validateProjectStatusTransition = (currentStatus, newStatus) => {
     const workflow = window.CONSTANTS.workflow.projectManagement;
-    const allowedTransitions = workflow.transitions[currentStatus]?.allowedTo || [];
+    const allowedTransitions = workflow.transitions[currentStatus] || [];
     return allowedTransitions.includes(newStatus);
   };
 
@@ -106,7 +106,7 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
     }
 
     const project = projects.find(p => p.projectId === projectId);
-    if (!validateStatusTransition(project.status, newStatus)) {
+    if (!validateProjectStatusTransition(project.status, newStatus)) {
       showMessage('Invalid status transition', 'error');
       return;
     }
@@ -265,7 +265,7 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
                 ),
                 React.createElement('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium' },
                   React.createElement('div', { className: 'flex space-x-2' },
-                    STATUS_CONFIG[project.status].actions.map(action =>
+                    localStatusConfig[project.status].actions.map(action =>
                       React.createElement('button', {
                         key: action,
                         onClick: () => handleStatusUpdate(project.projectId, action.toUpperCase()),
@@ -285,7 +285,8 @@ const CustomerProjects = ({ customer, onBack, showMessage }) => {
                     )
                   )
                 ),
-                React.createElement(StatusBadge, {
+                // This line uses the global StatusBadge
+                React.createElement(window.StatusBadge, {
                   status: project.Status,
                   key: `status-${project.ID}`
                 })
@@ -359,8 +360,44 @@ const checkModuleAccess = (status) => {
   return allowedModules;
 };
 
-const StatusBadge = ({ status }) => {
-  const config = STATUS_CONFIG[status];
+// Don't redefine StatusBadge globally, use the already registered one
+// Use our local StatusBadge component for internal use only
+const ProjectStatusBadge = ({ status }) => {
+  const localConfig = {
+    PENDING: {
+      color: 'yellow',
+      label: 'Pending',
+      icon: 'clock'
+    },
+    APPROVED: {
+      color: 'green',
+      label: 'Approved',
+      icon: 'check'
+    },
+    IN_PROGRESS: {
+      color: 'blue',
+      label: 'In Progress',
+      icon: 'play'
+    },
+    COMPLETED: {
+      color: 'purple',
+      label: 'Completed',
+      icon: 'flag'
+    },
+    CANCELLED: {
+      color: 'red',
+      label: 'Cancelled',
+      icon: 'x'
+    },
+    CLOSED: {
+      color: 'gray',
+      label: 'Closed',
+      icon: 'archive'
+    }
+  };
+  
+  const config = localConfig[status] || localConfig.PENDING;
+  
   return React.createElement('span', {
     className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
       bg-${config.color}-100 text-${config.color}-800`

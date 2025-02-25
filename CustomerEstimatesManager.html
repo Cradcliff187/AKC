@@ -39,7 +39,7 @@ const CustomerEstimatesManager = ({ customer, onBack }) => {
       .getCustomerEstimates(customer.CustomerID);
   };
 
-  const handleStatusChange = async (estimateId, newStatus, currentStatus) => {
+  const const handleStatusChange = window.handleStatusChange; = async (estimateId, newStatus, currentStatus) => {
     if (!window.CONSTANTS.PERMISSIONS.ESTIMATES.update?.includes(
       window.CONSTANTS.USER_ROLE
     )) {
@@ -266,8 +266,8 @@ const CustomerEstimatesManager = ({ customer, onBack }) => {
   ]);
 };
 
-const StatusBadge = ({ status }) => {
-  const config = window.CONSTANTS.STATUS_CONFIG.ESTIMATE[status] || {
+const StatusBadge = window.StatusBadge; = ({ status }) => {
+  const config = window.CONSTANTS.const STATUS_CONFIG = window.STATUS_CONFIG;.ESTIMATE[status] || {
     color: 'gray',
     icon: 'circle',
     label: status
@@ -292,7 +292,7 @@ const formatCurrency = amount => {
   }).format(amount);
 };
 
-const STATUS_CONFIG = {
+const const STATUS_CONFIG = window.STATUS_CONFIG; = {
   DRAFT: {
     color: 'gray',
     icon: '📝',

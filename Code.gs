@@ -1,22 +1,58 @@
 /**************************************
  * Code.gs - Main Application Logic
  **************************************/
-
-// ==========================================
-// UTILITY FUNCTIONS
-// ==========================================
-
-function extractFolderIdFromUrl(folderUrl) {
-  const urlPatterns = [
-    /\/folders\/([a-zA-Z0-9-_]+)/, 
-    /\/drive\/folders\/([a-zA-Z0-9-_]+)/, 
-    /id=([a-zA-Z0-9-_]+)/
-  ];
-  for (let pattern of urlPatterns) {
-    const match = folderUrl.match(pattern);
-    if (match && match[1]) return match[1];
+/**
+ * Gets the current user's information
+ * @return {Object} User information including email and display name
+ */
+function getCurrentUser() {
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    const userProperties = PropertiesService.getUserProperties();
+    
+    return {
+      email: userEmail,
+      displayName: userEmail.split('@')[0], // Simple display name based on email
+      lastLogin: new Date().toISOString(),
+      role: userProperties.getProperty('USER_ROLE') || 'CREATOR' // Default role
+    };
+  } catch (error) {
+    Logger.log(`Error getting current user: ${error.message}`);
+    return {
+      email: 'anonymous@example.com',
+      displayName: 'Anonymous User',
+      lastLogin: new Date().toISOString(),
+      role: 'CREATOR'
+    };
   }
-  throw new Error("Could not extract folder ID from the provided URL");
+}
+
+/**
+ * Sets the user role in user properties
+ * @param {string} role - The role to assign to the user
+ */
+function setUserRole(role) {
+  try {
+    const validRoles = ['CREATOR', 'MANAGER', 'ADMIN'];
+    
+    if (!validRoles.includes(role)) {
+      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
+    }
+    
+    const userProperties = PropertiesService.getUserProperties();
+    userProperties.setProperty('USER_ROLE', role);
+    
+    return {
+      success: true,
+      role: role
+    };
+  } catch (error) {
+    Logger.log(`Error setting user role: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 }
 
 // ==========================================

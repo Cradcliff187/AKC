@@ -62,7 +62,7 @@ const CustomerManagement = () => {
     }));
   };
 
-  const handleStatusChange = async (customerId, newStatus, currentStatus) => {
+  const const handleStatusChange = window.handleStatusChange; = async (customerId, newStatus, currentStatus) => {
     if (!window.CONSTANTS.PERMISSIONS.CUSTOMER.update?.includes(
       window.CONSTANTS.USER_ROLE
     )) {

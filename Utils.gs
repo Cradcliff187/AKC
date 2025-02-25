@@ -146,27 +146,17 @@ function validateStatusTransition(oldStatus, newStatus, type) {
   return true;
 }
 
-function logError(error) {
-  console.error('Error occurred:', error);
-  
-  // Log to spreadsheet if configured
-  if (CONSTANTS.ERROR_LOGGING.SPREADSHEET_ID) {
-    try {
-      const sheet = SpreadsheetApp.openById(CONSTANTS.ERROR_LOGGING.SPREADSHEET_ID)
-        .getSheetByName(CONSTANTS.ERROR_LOGGING.SHEET_NAME);
-        
-      sheet.appendRow([
-        new Date(),
-        error.message || 'Unknown error',
-        error.stack || 'No stack trace',
-        Session.getActiveUser().getEmail()
-      ]);
-    } catch (loggingError) {
-      console.error('Failed to log error to spreadsheet:', loggingError);
-    }
+function handleStatusChange(currentStatus, newStatus, type) {
+  try {
+    validateStatusTransition(currentStatus, newStatus, type);
+    return createStandardResponse(true, { 
+      currentStatus, 
+      newStatus, 
+      type 
+    });
+  } catch (error) {
+    return handleError(error, 'handleStatusChange');
   }
-  
-  return true;
 }
 
 function validateCustomerData(data) {
@@ -185,6 +175,20 @@ function validateCustomerData(data) {
 
   return {
     isValid: errors.length === 0,
-    errors
+    errors: errors
   };
 }
+
+function extractFolderIdFromUrl(folderUrl) {
+  const urlPatterns = [
+    /\/folders\/([a-zA-Z0-9-_]+)/, 
+    /\/drive\/folders\/([a-zA-Z0-9-_]+)/, 
+    /id=([a-zA-Z0-9-_]+)/
+  ];
+  for (let pattern of urlPatterns) {
+    const match = folderUrl.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  throw new Error("Could not extract folder ID from the provided URL");
+}
+

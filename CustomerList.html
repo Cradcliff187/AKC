@@ -22,7 +22,7 @@ const CustomerList = ({
     if (onSearch) onSearch(value);
   };
 
-  const handleStatusChange = (e) => {
+  const const handleStatusChange = window.handleStatusChange; = (e) => {
     const value = e.target.value;
     setStatusFilter(value);
     if (onFilterChange) {
@@ -45,7 +45,7 @@ const CustomerList = ({
   };
 
   // Status badge component
-  const StatusBadge = ({ status, onStatusChange, disabled }) => {
+  const StatusBadge = window.StatusBadge; = ({ status, onStatusChange, disabled }) => {
     const config = CustomerStatusManager.getStatusConfig(status);
     const workflow = window.CONSTANTS.workflow.customerManagement;
     const transitions = workflow.transitions[status] || [];
@@ -82,7 +82,7 @@ const CustomerList = ({
     onSelectCustomer(customer);
   };
 
-  const handleStatusChange = async (customerId, newStatus, currentStatus) => {
+  const const handleStatusChange = window.handleStatusChange; = async (customerId, newStatus, currentStatus) => {
     if (!hasPermission('update')) {
       showMessage('Insufficient permissions to update status', 'error');
       return;
@@ -137,7 +137,7 @@ const CustomerList = ({
         // Status Filter
         React.createElement('select', {
           value: statusFilter,
-          onChange: handleStatusChange,
+          onChange: const handleStatusChange = window.handleStatusChange;,
           className: 'p-2 border rounded-md'
         }, [
           React.createElement('option', { value: 'All' }, 'All Statuses'),

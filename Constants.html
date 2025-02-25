@@ -12,11 +12,11 @@ var CONSTANTS = {
     CLOSED: 'CLOSED'
   },
 
-  // Status Configuration with UI elements
-  STATUS_CONFIG: {
+  // Consolidated Status Configuration
+  const STATUS_CONFIG = window.STATUS_CONFIG;: {
     ESTIMATE: {
-      DRAFT: { color: 'gray', icon: 'edit', label: 'Draft', actions: ['submit', 'cancel'] },
-      PENDING: { color: 'yellow', icon: 'clock', label: 'Pending Review', actions: ['approve', 'reject', 'cancel'] },
+      DRAFT: { color: 'gray', icon: 'edit', label: 'Draft' },
+      PENDING: { color: 'yellow', icon: 'clock', label: 'Pending Review' },
       APPROVED: { color: 'green', icon: 'check', label: 'Approved', actions: ['complete', 'cancel'] },
       REJECTED: { color: 'red', icon: 'x', label: 'Rejected', actions: ['revise', 'cancel'] },
       COMPLETED: { color: 'blue', icon: 'flag', label: 'Completed', actions: ['close'] },
@@ -24,78 +24,70 @@ var CONSTANTS = {
       CLOSED: { color: 'gray', icon: 'archive', label: 'Closed', actions: [] }
     },
     PROJECT: {
+      PENDING: { color: 'yellow', icon: 'clock', label: 'Pending' },
+      APPROVED: { color: 'green', icon: 'check', label: 'Approved' },
       DRAFT: { color: 'gray', icon: 'edit', label: 'Draft', actions: ['submit', 'cancel'] },
-      PENDING: { color: 'yellow', icon: 'clock', label: 'Pending', actions: ['approve', 'reject', 'cancel'] },
-      APPROVED: { color: 'blue', icon: 'check', label: 'Approved', actions: ['start', 'cancel'] },
       IN_PROGRESS: { color: 'blue', icon: 'flag', label: 'In Progress', actions: ['complete', 'cancel'] },
       COMPLETED: { color: 'green', icon: 'check', label: 'Completed', actions: ['close'] },
       CANCELLED: { color: 'red', icon: 'ban', label: 'Cancelled', actions: [] },
       CLOSED: { color: 'gray', icon: 'archive', label: 'Closed', actions: [] }
-    },
-    CUSTOMER: {
-      ACTIVE: { color: 'green', icon: '●', label: 'Active' },
-      INACTIVE: { color: 'red', icon: '○', label: 'Inactive' },
-      PENDING: { color: 'yellow', icon: '◐', label: 'Pending' }
     }
+  },
+
+  // Address validation configuration
+  ADDRESS_VALIDATION: {
+    TIMEOUT: 10000,
+    REQUIRED_FIELDS: ['street1', 'city', 'state', 'zip'],
+    TYPES: {
+      CUSTOMER: 'CUSTOMER',
+      PROJECT: 'PROJECT',
+      BILLING: 'BILLING'
+    },
+    STRICT_MODE: true,
+    PLACEHOLDER: 'Enter address'
   },
 
   // Permission Configuration
   PERMISSIONS: {
-    ESTIMATE: {
-      submit: ['CREATOR', 'ADMIN'],
-      approve: ['MANAGER', 'ADMIN'],
-      reject: ['MANAGER', 'ADMIN'],
-      revise: ['CREATOR', 'ADMIN'],
-      complete: ['CREATOR', 'MANAGER', 'ADMIN'],
-      cancel: ['CREATOR', 'MANAGER', 'ADMIN'],
-      close: ['MANAGER', 'ADMIN']
-    },
-    PROJECT: {
-      submit: ['CREATOR', 'ADMIN'],
-      approve: ['MANAGER', 'ADMIN'],
-      reject: ['MANAGER', 'ADMIN'],
-      start: ['CREATOR', 'MANAGER', 'ADMIN'],
-      complete: ['CREATOR', 'MANAGER', 'ADMIN'],
-      cancel: ['MANAGER', 'ADMIN'],
-      close: ['MANAGER', 'ADMIN'],
-      timeTracking: {
-        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
-        view: ['CREATOR', 'MANAGER', 'ADMIN']
-      },
-      materials: {
-        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
-        view: ['CREATOR', 'MANAGER', 'ADMIN']
-      },
-      subInvoices: {
-        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
-        view: ['CREATOR', 'MANAGER', 'ADMIN']
-      }
-    },
     CUSTOMER: {
       view: ['CREATOR', 'MANAGER', 'ADMIN'],
       edit: ['MANAGER', 'ADMIN'],
       delete: ['ADMIN'],
-      create: ['MANAGER', 'ADMIN'],
-      update: ['MANAGER', 'ADMIN'],
-      financials: {
-        view: ['MANAGER', 'ADMIN']
+      dashboard: { view: ['CREATOR', 'MANAGER', 'ADMIN'] },
+      contacts: { view: ['CREATOR', 'MANAGER', 'ADMIN'] },
+      projects: { view: ['CREATOR', 'MANAGER', 'ADMIN'] },
+      estimates: { view: ['CREATOR', 'MANAGER', 'ADMIN'] },
+      documents: { view: ['CREATOR', 'MANAGER', 'ADMIN'] },
+      communications: { view: ['CREATOR', 'MANAGER', 'ADMIN'] },
+      financials: { view: ['CREATOR', 'MANAGER', 'ADMIN'] }
+    },
+    PROJECT: {
+      timeTracking: {
+        submit: ['CREATOR', 'MANAGER', 'ADMIN'],
+        view: ['CREATOR', 'MANAGER', 'ADMIN']
       },
-      communications: {
-        view: ['CREATOR', 'MANAGER', 'ADMIN'],
-        send: ['MANAGER', 'ADMIN']
-      },
-      documents: {
-        view: ['CREATOR', 'MANAGER', 'ADMIN'],
-        upload: ['MANAGER', 'ADMIN'],
-        delete: ['ADMIN']
-      },
-      contacts: {
-        view: ['CREATOR', 'MANAGER', 'ADMIN'],
-        create: ['MANAGER', 'ADMIN'],
-        update: ['MANAGER', 'ADMIN'],
-        delete: ['ADMIN']
+      subInvoices: {
+        submit: ['CREATOR', 'MANAGER', 'ADMIN']
       }
+    },
+    ESTIMATES: {
+      view: ['CREATOR', 'MANAGER', 'ADMIN'],
+      create: ['CREATOR', 'MANAGER', 'ADMIN'],
+      update: ['MANAGER', 'ADMIN']
     }
+  },
+
+  // Materials receipt configuration
+  MATERIALS_RECEIPTS: {
+    ALLOWED_FILE_TYPES: [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf'
+    ],
+    MAX_FILE_SIZE: 10485760, // 10MB
+    MAX_AMOUNT: 100000, // $100,000
+    INITIAL_STATUS: 'PENDING'
   },
 
   // Validation Rules
@@ -118,64 +110,43 @@ var CONSTANTS = {
     }
   },
 
-  // Utility Functions
-  ADDRESS_UTILS: {
-    formatAddress: function(components) {
-      var street = components.street || '';
-      var city = components.city || '';
-      var state = components.state || '';
-      var zip = components.zip || '';
-      return street + ', ' + city + ', ' + state + ' ' + zip;
+  // Status Transitions
+  STATUS_TRANSITIONS: {
+    PROJECT: {
+      PENDING: ['APPROVED', 'CANCELLED'],
+      APPROVED: ['IN_PROGRESS', 'CANCELLED'],
+      IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+      COMPLETED: ['CLOSED'],
+      CANCELLED: [],
+      CLOSED: []
     },
-    
-    validateAddressComponents: function(components) {
-      var required = ['street', 'city', 'state', 'zip'];
-      return required.every(function(field) {
-        return components[field];
-      });
+    ESTIMATE: {
+      DRAFT: ['PENDING', 'CANCELLED'],
+      PENDING: ['APPROVED', 'REJECTED', 'CANCELLED'],
+      APPROVED: ['COMPLETED', 'CANCELLED'],
+      REJECTED: ['DRAFT', 'CANCELLED'],
+      COMPLETED: ['CLOSED'],
+      CANCELLED: [],
+      CLOSED: []
+    },
+    CUSTOMER: {
+      PENDING: ['ACTIVE', 'INACTIVE'],
+      ACTIVE: ['INACTIVE', 'ARCHIVED'],
+      INACTIVE: ['ACTIVE', 'ARCHIVED'],
+      ARCHIVED: ['ACTIVE']
     }
   },
 
-  // Validation Functions
-  validate: {
-    estimate: function(data) {
-      var errors = [];
-      var rules = CONSTANTS.VALIDATION_RULES.ESTIMATE;
-      
-      if (!data.amount || data.amount < rules.amount.min) {
-        errors.push('Invalid amount');
-      }
-      if (!data.description || data.description.length < rules.description.minLength) {
-        errors.push('Description too short');
-      }
-      if (!data.date && rules.date.required) {
-        errors.push('Date is required');
-      }
-      
-      return {
-        isValid: errors.length === 0,
-        errors: errors
-      };
-    },
-    project: function(data) {
-      var errors = [];
-      var rules = CONSTANTS.VALIDATION_RULES.PROJECT;
-      
-      if (!data.startDate && rules.startDate.required) {
-        errors.push('Start date is required');
-      }
-      if (!data.description || data.description.length < rules.description.minLength) {
-        errors.push('Description too short');
-      }
-      
-      return {
-        isValid: errors.length === 0,
-        errors: errors
-      };
+  // Module Access Configuration
+  MODULE_ACCESS: {
+    PROJECT: {
+      APPROVED: ['estimates', 'documents'],
+      IN_PROGRESS: ['estimates', 'documents', 'timeTracking', 'materials'],
+      COMPLETED: ['documents', 'reports']
     }
   },
 
-  // Add missing error messages
+  // Error Messages
   ERROR_MESSAGES: {
     INITIALIZATION_FAILED: 'Application failed to initialize',
     SESSION_INVALID: 'Your session has expired. Please refresh the page.',
@@ -183,43 +154,298 @@ var CONSTANTS = {
     REACT_NOT_LOADED: 'Required resources not loaded'
   },
 
-  // Add missing address validation config
-  ADDRESS_VALIDATION: {
-    TIMEOUT: 10000,
-    REQUIRED_FIELDS: ['street1', 'city', 'state', 'zip'],
-    TYPES: {
-      CUSTOMER: 'CUSTOMER',
-      PROJECT: 'PROJECT',
-      BILLING: 'BILLING'
+  // UI Related Constants
+  UI: {
+    ALERT_TIMEOUT: 5000,
+    DATE_FORMAT: 'MM/dd/yyyy',
+    CURRENCY_FORMAT: {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }
+  },
+
+  // Form Validation Constants
+  VALIDATION: {
+    PATTERNS: {
+      EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      PHONE: /^\(\d{3}\) \d{3}-\d{4}$/,
+      ZIP: /^\d{5}(-\d{4})?$/
     },
-    STRICT_MODE: true
+    MESSAGES: {
+      REQUIRED: 'This field is required',
+      INVALID_EMAIL: 'Please enter a valid email address',
+      INVALID_PHONE: 'Please enter a valid phone number'
+    }
+  },
+
+  // Form Configuration
+  FORMS: {
+    estimate: {
+      sections: [
+        {
+          title: 'Customer Information',
+          fields: [
+            {
+              name: 'customerId',
+              type: 'select',
+              label: 'Customer',
+              required: true,
+              source: 'customers',
+              displayFields: ['name', 'customerId'],
+              searchable: true
+            },
+            {
+              name: 'projectName',
+              type: 'text',
+              label: 'Project Name',
+              required: true,
+              maxLength: 100
+            }
+          ]
+        },
+        {
+          title: 'Scope of Work',
+          fields: [
+            {
+              name: 'scopeOfWork',
+              type: 'textarea',
+              label: 'Scope of Work',
+              required: true,
+              rows: 5,
+              richText: false
+            }
+          ]
+        }
+      ]
+    }
+  },
+
+  // Formatters
+  FORMATTERS: {
+    currency: {
+      type: 'number',
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    },
+    phone: {
+      type: 'string',
+      format: '(###) ###-####',
+      validation: {}
+    },
+    date: {
+      type: 'date',
+      format: 'MM/dd/yyyy',
+      picker: true
+    }
+  },
+
+  // File Upload Configuration
+  FILE_UPLOAD: {
+    types: [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf'
+    ],
+    maxSize: 10485760,
+    multiple: false,
+    preview: true
+  },
+
+  // Templates Configuration
+  TEMPLATES: {
+    estimate: {
+      docId: '1uf8ZrAGNIkzoWHfaIaEHYNQ6PqZ7roHfa2FxO0ZkEHg',
+      folder: '1whTNqMixlToIAzT4ZSqwH4c8b-PUxFoM',
+      replacements: [
+        '{{EstimateNumber}}',
+        '{{Date}}',
+        '{{CustomerName}}',
+        '{{CustomerAddress}}',
+        '{{CustomerCityStateZip}}',
+        '{{ScopeOfWork}}'
+      ]
+    }
+  },
+
+  // Navigation Configuration
+  NAVIGATION: {
+    primary: [
+      {
+        label: 'Dashboard',
+        route: '/',
+        icon: 'home'
+      },
+      {
+        label: 'Customers',
+        route: '/customers',
+        icon: 'users'
+      },
+      {
+        label: 'Estimates',
+        route: '/estimates',
+        icon: 'file-text'
+      }
+    ]
+  },
+
+  // Customer Module Configuration
+  CUSTOMER_MODULE: {
+    DOCUMENT_TYPES: {
+      ESTIMATE: 'ESTIMATE',
+      CONTRACT: 'CONTRACT',
+      INVOICE: 'INVOICE',
+      COMMUNICATION: 'COMMUNICATION',
+      OTHER: 'OTHER'
+    },
+    CONTACT_ROLES: {
+      PRIMARY: 'PRIMARY',
+      BILLING: 'BILLING',
+      TECHNICAL: 'TECHNICAL',
+      MANAGEMENT: 'MANAGEMENT',
+      OTHER: 'OTHER'
+    },
+    VIEWS: {
+      DASHBOARD: 'dashboard',
+      DETAILS: 'details',
+      ESTIMATES: 'estimates',
+      PROJECTS: 'projects',
+      DOCUMENTS: 'documents',
+      CONTACTS: 'contacts',
+      FINANCIALS: 'financials',
+      COMMUNICATIONS: 'communications'
+    },
+    DOCUMENT_CONFIG: {
+      maxFileSize: 10485760, // 10MB
+      allowedTypes: {
+        DEFAULT: ['application/pdf', 'image/jpeg', 'image/png'],
+        ESTIMATE: ['application/pdf'],
+        CONTRACT: ['application/pdf'],
+        INVOICE: ['application/pdf'],
+        COMMUNICATION: ['application/pdf', 'text/plain']
+      }
+    }
+  },
+
+  // Workflow Configuration - Critical for client components
+  workflow: {
+    projectManagement: {
+      states: {
+        PENDING: 'PENDING',
+        APPROVED: 'APPROVED',
+        IN_PROGRESS: 'IN_PROGRESS',
+        COMPLETED: 'COMPLETED',
+        CANCELLED: 'CANCELLED',
+        CLOSED: 'CLOSED'
+      },
+      transitions: {
+        PENDING: ['APPROVED', 'CANCELLED'],
+        APPROVED: ['IN_PROGRESS', 'CANCELLED'],
+        IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+        COMPLETED: ['CLOSED'],
+        CANCELLED: [],
+        CLOSED: []
+      },
+      hooks: {
+        beforeTransition: ['logActivity', 'validatePermissions'],
+        afterTransition: ['updateProjectStatus', 'notifyCustomer'],
+        onError: ['revertStatus', 'notifyAdmin']
+      },
+      moduleAccess: {
+        APPROVED: ['estimates', 'documents'],
+        IN_PROGRESS: ['estimates', 'documents', 'timeTracking', 'materials'],
+        COMPLETED: ['documents', 'reports']
+      },
+      statusDisplay: {
+        PENDING: { color: 'yellow', icon: 'clock', label: 'Pending' },
+        APPROVED: { color: 'green', icon: 'check', label: 'Approved' },
+        IN_PROGRESS: { color: 'blue', icon: 'play', label: 'In Progress' },
+        COMPLETED: { color: 'purple', icon: 'flag', label: 'Completed' },
+        CANCELLED: { color: 'red', icon: 'x', label: 'Cancelled' },
+        CLOSED: { color: 'gray', icon: 'archive', label: 'Closed' }
+      }
+    },
+    estimateManagement: {
+      states: {
+        DRAFT: 'DRAFT',
+        PENDING: 'PENDING',
+        APPROVED: 'APPROVED',
+        REJECTED: 'REJECTED',
+        COMPLETED: 'COMPLETED',
+        CANCELLED: 'CANCELLED',
+        CLOSED: 'CLOSED'
+      },
+      transitions: {
+        DRAFT: ['PENDING', 'CANCELLED'],
+        PENDING: ['APPROVED', 'REJECTED', 'CANCELLED'],
+        APPROVED: ['COMPLETED', 'CANCELLED'],
+        REJECTED: ['DRAFT', 'CANCELLED'],
+        COMPLETED: ['CLOSED'],
+        CANCELLED: [],
+        CLOSED: []
+      },
+      hooks: {
+        beforeTransition: ['logActivity', 'validatePermissions'],
+        afterTransition: ['updateEstimateStatus', 'notifyCustomer'],
+        onError: ['revertStatus', 'notifyAdmin']
+      },
+      statusDisplay: {
+        DRAFT: { color: 'gray', icon: 'edit', label: 'Draft' },
+        PENDING: { color: 'yellow', icon: 'clock', label: 'Pending Review' },
+        APPROVED: { color: 'green', icon: 'check', label: 'Approved' },
+        REJECTED: { color: 'red', icon: 'x', label: 'Rejected' },
+        CANCELLED: { color: 'red', icon: 'ban', label: 'Cancelled' },
+        COMPLETED: { color: 'blue', icon: 'flag', label: 'Completed' },
+        CLOSED: { color: 'gray', icon: 'archive', label: 'Closed' }
+      }
+    },
+    customerManagement: {
+      states: {
+        PENDING: 'PENDING',
+        ACTIVE: 'ACTIVE',
+        INACTIVE: 'INACTIVE',
+        ARCHIVED: 'ARCHIVED'
+      },
+      transitions: {
+        PENDING: ['ACTIVE', 'INACTIVE'],
+        ACTIVE: ['INACTIVE', 'ARCHIVED'],
+        INACTIVE: ['ACTIVE', 'ARCHIVED'],
+        ARCHIVED: ['ACTIVE']
+      },
+      statusDisplay: {
+        PENDING: { color: 'yellow', icon: 'clock', label: 'Pending', actions: ['ACTIVE', 'INACTIVE'] },
+        ACTIVE: { color: 'green', icon: 'check', label: 'Active', actions: ['INACTIVE', 'ARCHIVED'] },
+        INACTIVE: { color: 'gray', icon: 'ban', label: 'Inactive', actions: ['ACTIVE', 'ARCHIVED'] },
+        ARCHIVED: { color: 'red', icon: 'archive', label: 'Archived', actions: ['ACTIVE'] }
+      }
+    }
   }
 };
 
-// Single export pattern
-if (typeof this !== 'undefined') {
-  this.CONSTANTS = CONSTANTS;
-}
-
-// Add a function to access constants safely
-function getConstants() {
-  return CONSTANTS;
-}
+// Default user role if not set
+CONSTANTS.USER_ROLE = 'CREATOR';
 
 // For client-side scripts, add compatibility layer
 if (typeof window !== 'undefined') {
   window.CONSTANTS = CONSTANTS;
 }
 
+// For server-side scripts, add compatibility layer
+if (typeof this !== 'undefined') {
+  this.CONSTANTS = CONSTANTS;
+}
+
 // Constants verification
 window.addEventListener('DOMContentLoaded', function() {
   var requiredConstants = [
     'ESTIMATE_STATUSES',
-    'STATUS_CONFIG',
+    'const STATUS_CONFIG = window.STATUS_CONFIG;',
     'PERMISSIONS',
     'VALIDATION_RULES',
-    'ADDRESS_UTILS',
-    'validate'
+    'ADDRESS_VALIDATION',
+    'workflow'
   ];
   
   var missingConstants = requiredConstants.filter(function(constant) {
@@ -235,12 +461,15 @@ window.addEventListener('DOMContentLoaded', function() {
   window.dispatchEvent(new Event('constants_loaded'));
 });
 
-// Helper function for waiting on constants
-window.waitForConstants = function(callback) {
-  if (window.CONSTANTS_LOADED) {
-    callback();
-  } else {
-    window.addEventListener('constants_loaded', callback);
-  }
-};
+if (typeof window.CONSTANTS === 'undefined') {
+  window.CONSTANTS = {
+    const STATUS_CONFIG = window.STATUS_CONFIG;: {
+      // ... status configurations
+    },
+    const validateCustomerData = window.validateCustomerData;: function(data) {
+      // ... validation logic
+    }
+  };
+  Object.freeze(window.CONSTANTS);
+}
 </script>
